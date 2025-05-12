@@ -1,0 +1,35 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}My Climate Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/style.css' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'core/favicon.png' %}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    {% block extra_header %}{% endblock %}
+</head>
+
+<body>
+    <div class="whaa">
+        <header>
+            <nav class="navbar">
+                <a href={% url 'mega-thingy' %}>главная</a>
+                <a href={% url 'mega-thingy' %}>карты</a>
+                <a href={% url 'table_thing' %}>цифры</a>
+                <a href={% url 'mega-thingy' %}>тренды</a>
+            </nav>
+        </header>
+
+        <main>
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+    <footer>
+        <p>&copy; 2025 Моя Штукенция</p>
+    </footer>
+</body>
+<!-- Include JS files -->
+{% block scripts %}{% endblock %}
+</html>

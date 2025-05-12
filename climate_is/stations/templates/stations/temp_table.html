@@ -1,0 +1,57 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Табличка{% endblock %}
+
+{% block extra_header %}
+    <style>
+        select, button { padding: 8px; margin-right: 10px; }
+        table { min-height: 200px; border-collapse: collapse; margin-top: 20px; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        <select id="station-select">
+            <option value=""> -- Выберите станцию -- </option>
+            {% for station in stations %}  <!-- Используем переменную stations из контекста -->
+                <option value="{{ station.station_id }}">{{ station.name }}</option>
+            {% endfor %}
+        </select>
+        
+        <select id="time-step" class="form-control">
+            <option value="1d">День</option>
+            <option value="1w">Неделя</option>
+            <option value="1m">Месяц</option>
+        </select>
+        
+        <button id="load-btn">Загрузить</button>
+    </div>
+    
+    <div class="table-responsive">
+        <table id="data-table" class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Температура (°C)</th>
+                    <th>Влажность (%)</th>
+                    <th>Индекс жары</th>
+                </tr>
+            </thead>
+            <tbody>
+                    <!-- здесь подгружаем по запросу -->
+                    <!--или может сделать, чтобы что-то вылезало по дефолту -->
+            </tbody>
+        </table>
+    </div>
+
+    <div id="loading-spinner" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Загрузка...</span>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %} <script src="{% static 'stations/loadup.js' %}"></script> {% endblock %}
