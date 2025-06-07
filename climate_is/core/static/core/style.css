@@ -48,7 +48,12 @@ header {
     margin: auto;
     border: 3px solid #8276ff;
 }
-
+#map{
+    height: 500px;  /* у карты обязательно должна быть задана высота*/
+    width: 400px;
+    margin: auto;
+    border: 3px solid #8276ff;
+}
 main {
     flex: 1;
     padding: 20px;

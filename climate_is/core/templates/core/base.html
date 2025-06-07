@@ -6,7 +6,7 @@
     <title>{% block title %}My Climate Dashboard{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/style.css' %}">
     <link rel="shortcut icon" type="image/png" href="{% static 'core/favicon.png' %}">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     {% block extra_header %}{% endblock %}
 </head>
 
@@ -15,9 +15,10 @@
         <header>
             <nav class="navbar">
                 <a href={% url 'mega-thingy' %}>главная</a>
-                <a href={% url 'mega-thingy' %}>карты</a>
+                <a href={% url 'choropleth' %}>картограммы</a>
                 <a href={% url 'table_thing' %}>цифры</a>
-                <a href={% url 'mega-thingy' %}>тренды</a>
+                <a href={% url 'graph' %}>тренды</a>
+                <a href={% url 'admin:index' %}>админка</a>
             </nav>
         </header>
 

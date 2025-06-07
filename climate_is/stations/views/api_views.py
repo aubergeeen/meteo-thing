@@ -38,10 +38,7 @@ class SensorSeriesViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SensorSeriesSerializer
 
 
-'''
-    вспомогательная функция, получает статистику выбранного метеопараметра
-    для перечня датчиков
-'''
+#вспомогательная ф-я, получает ДЛИТЕЛЬНУЮ АГРЕГИРОВАННУЮ статистику выбранного метеопараметра для конкретного датчика
 def fetch_param_stat(sensor_ids, param_name, trunc_func):
     param_type = ParameterType.objects.get(name=param_name)     # получаем ORM метеопараметра по названию
     sensors_specific = Sensor.objects.filter(sensor_id__in=sensor_ids, sensor_model__param_type=param_type).select_related('param_type')
@@ -89,13 +86,25 @@ def get_stats_over_time(request):
 
     return JsonResponse(data, safe=False)
 
+'''
+Возвращает запрашиваемые поля станции ПОМЕНЯТЬ НАЗВАНИЕ
+'''
 @api_view(['GET'])
 def list_station_locations(request):
     fields_param = request.GET.get('fields')
     if fields_param:
         fields = fields_param.split(',')
     else:
-        # по умолчанию возвращаем эти поля
         fields = ['station_id']
     data = Station.objects.all().values(*fields)  # получаем поля id и name всех станций из таблицы
     return Response(list(data))
+
+'''
+Возвращает статистику (сред, мин, макс)
+по интервалу (день, неделя, месяц, год)
+для выбранного параметра (по полю param id)
+'''
+@api_view(['GET'])
+def aggregate_param_interval(request):
+    field = request.query_params.get('field', '1')
+    interval = request.query_params.get('interval', 'day')
