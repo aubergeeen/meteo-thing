@@ -1,0 +1,275 @@
+{% extends 'core/base2.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_header %}
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        #bigtitle-dud {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        #bigtitle-dud h1 {
+            font-size: 2.5em;
+            margin: 0;
+            line-height: 1.3;
+        }
+        
+        .graph-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .graph-wrapper {
+            flex: 1 1 calc(50% - 10px);
+            min-width: 400px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 15px;
+        }
+        
+        .graph {
+            width: 100%;
+            height: 400px;
+        }
+        
+        .graph-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .graph-footer p {
+            font-size: 0.9em;
+            color: #333;
+            margin: 10px;
+            margin-left: 50px;
+            flex: 1;
+        }
+        
+        .graph-footer button {
+            padding: 8px 16px;
+            background-color: rgb(255, 0, 0);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        
+        .graph-footer button:hover {
+            background-color: rgb(173, 28, 28);
+
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        #insert-map-here {
+            height: 600px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Styling for Leaflet popup */
+        .station-popup .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+            background-color: #fff;
+        }
+        
+        .station-popup .leaflet-popup-content {
+            margin: 15px;
+            font-family: 'Arial', sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 250px;
+        }
+        
+        .station-popup .station-card {
+            padding: 10px;
+        }
+        
+        .station-popup .station-card h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .station-popup .station-card p {
+            margin: 5px 0;
+            color: #555;
+        }
+        
+        .station-popup .station-card p strong {
+            color: #000;
+        }
+        .leaflet-control-attribution {
+            display: none;
+        }
+        
+        @media (max-width: 600px) {
+            .station-popup .leaflet-popup-content {
+                max-width: 200px;
+                font-size: 12px;
+            }
+            
+            .station-popup .station-card h3 {
+                font-size: 16px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div id="bigtitle-dud">
+        <h1><span style="color: green">ПОЧТИ</span> ВСЁ ПРО КЛИМАТ </br><span style="color: red">ПЕРМСКОГО КРАЯ</span></h1>
+    </div>    
+    
+    <div class="graph-container">
+        <div class="graph-wrapper">
+            <div id="temperatureGraph" class="graph"></div>
+            <div class="graph-footer">
+                <p>График показывает сравнение реальной температуры с климатической нормой (1995–2025) для Пермского края.</p>
+                <button>Далее</button>
+            </div>
+        </div>
+        <div class="graph-wrapper">
+            <div id="precipitationGraph" class="graph"></div>
+            <div class="graph-footer">
+                <p>График отображает сравнение фактических осадков с климатической нормой (1995–2025) для Пермского края.</p>
+                <button>Далее</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="insert-map-here"></div>
+    </div>
+
+    <script>
+        // Fetch climate data from the endpoint
+        fetch('/api/climate-data/')
+            .then(response => response.json())
+            .then(data => {
+                // Generate tick values for every 3rd day
+                const tickIndices = Array.from({ length: Math.ceil(data.dates.length / 3) }, (_, i) => i * 3);
+                const tickValues = tickIndices.map(i => data.dates[i]);
+
+                // Temperature graph
+                const tempTrace1 = {
+                    x: data.dates,
+                    y: data.temperature.climate_norm,
+                    name: 'Климатическая норма<br>(1995-2025)',
+                    line: {
+                        color: 'rgb(55, 128, 191)',
+                        width: 3,
+                        dash: 'dot'
+                    }
+                };
+
+                const tempTrace2 = {
+                    x: data.dates,
+                    y: data.temperature.actual,
+                    name: 'Реальная температура',
+                    line: {
+                        color: 'rgb(255, 65, 54)',
+                        width: 3
+                    }
+                };
+
+                const tempData = [tempTrace1, tempTrace2];
+
+                const tempLayout = {
+                    title: 'Daily Temperature Comparison (°C)',
+                    xaxis: {
+                        title: 'Date',
+                        tickangle: -45,
+                        type: 'category',
+                        tickvals: tickValues,
+                        ticktext: tickValues
+                    },
+                    yaxis: {
+                        title: 'Temperature (°C)'
+                    },
+                    hovermode: 'closest'
+                };
+
+                Plotly.newPlot('temperatureGraph', tempData, tempLayout);
+
+                // Precipitation graph
+                const precipTrace1 = {
+                    x: data.dates,
+                    y: data.precipitation.climate_norm,
+                    name: 'Климатическая норма<br>(1995-2025)',
+                    type: 'bar',
+                    marker: {
+                        color: 'rgba(55, 128, 191, 0.7)'
+                    }
+                };
+
+                const precipTrace2 = {
+                    x: data.dates,
+                    y: data.precipitation.actual,
+                    name: 'Реальные осадки',
+                    type: 'bar',
+                    marker: {
+                        color: 'rgba(0, 128, 0, 0.7)'
+                    }
+                };
+
+                const precipData = [precipTrace1, precipTrace2];
+
+                const precipLayout = {
+                    title: 'Daily Precipitation Comparison (mm)',
+                    xaxis: {
+                        title: 'Date',
+                        tickangle: -45,
+                        type: 'category',
+                        tickvals: tickValues,
+                        ticktext: tickValues
+                    },
+                    yaxis: {
+                        title: 'Precipitation (mm)'
+                    },
+                    barmode: 'group'
+                };
+
+                Plotly.newPlot('precipitationGraph', precipData, precipLayout);
+            })
+            .catch(error => console.error('Error fetching climate data:', error));
+    </script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const hereURL = "{% static 'core/' %}"
+</script>
+<script src="{% static 'core/main-map.js' %}"></script>
+{% endblock %}

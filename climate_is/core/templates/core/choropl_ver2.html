@@ -1,0 +1,132 @@
+{% extends 'core/base2.html' %}
+{% load static %}
+
+{% block title %}Картограммы{% endblock %}
+
+{% block content %}
+<div style="width: 100%; display: flex; justify-content: center; gap: 5%;">
+    <div id="map-container" style="flex: 2; display: flex; flex-direction: column; align-items: center;">
+        <div id="map" style="width: 100%; height: 700px;"></div>
+        <button class="bg-green-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4">Скачать PNG</button>
+    </div>
+    <div class="picker" style="flex: 1;">
+        <div class="tabs">
+            <div class="tab-header">
+                <button type="button" class="tab-button active" data-tab="statistics">Статистика</button>
+                <button type="button" class="tab-button" data-tab="indexes">Индексы</button>
+            </div>
+            <div class="tab-content">
+                <div id="statistics" class="tab-pane active">
+                    <form style="text-align: center;">
+                        <select id="parameter-select-statistics" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 h-8 w-full">
+                            <option value="temp">Температура</option>
+                            <option value="humidity">Влажность</option>
+                        </select><br>
+                        <select id="aggregate-select-statistics" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 h-8 w-full">
+                            <option value="avg">Среднее</option>
+                            <option value="min">Минимум</option>
+                            <option value="max">Максимум</option>
+                            <option value="sum" class="precip-option">Сумма</option>
+                            <option value="anom">Аномалия</option>
+                        </select><br>
+                        <select id="period-select-statistics" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 h-8 w-full">
+                            <option value="1">Январь</option>
+                            <option value="2">Февраль</option>
+                            <option value="3">Март</option>
+                            <option value="4">Апрель</option>
+                            <option value="5">Май</option>
+                            <option value="6">Июнь</option>
+                            <option value="7">Июль</option>
+                            <option value="8">Август</option>
+                            <option value="9">Сентябрь</option>
+                            <option value="10">Октябрь</option>
+                            <option value="11">Ноябрь</option>
+                            <option value="12">Декабрь</option>
+                        </select><br>
+                        <button type="button" class="bg-red-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">ОК</button>
+                    </form>
+                </div>
+                <div id="indexes" class="tab-pane" style="display: none;">
+                    <form style="text-align: center;">    
+                        <select id="aggregate-select-indexes" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm 
+                        rounded-lg focus:ring-blue-500 focus:border-blue-500 h-8 w-full">
+                            <option value="cdd" class="temp-option">UTCI</option>
+                            <option value="cdd" class="temp-option">Тепловой индекс</option>
+                            <option value="cdd" class="temp-option">Wind Chill</option>
+                            <option value="hdd" class="temp-option">Эффективная температура</option>
+                            <option value="hdd" class="temp-option">Эффективная температура (на солн.)</option>
+                        </select><br>
+                        <select id="period-select-indexes" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 h-8 w-full">
+                            <option value="1">Январь</option>
+                            <option value="2">Февраль</option>
+                            <option value="3">Март</option>
+                            <option value="4">Апрель</option>
+                            <option value="5">Май</option>
+                            <option value="6">Июнь</option>
+                            <option value="7">Июль</option>
+                            <option value="8">Август</option>
+                            <option value="9">Сентябрь</option>
+                            <option value="10">Октябрь</option>
+                            <option value="11">Ноябрь</option>
+                            <option value="12">Декабрь</option>
+                        </select><br><br>
+                        <button type="button" class="bg-red-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">ОК</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tabs { width: 100%; max-width: 300px; margin: 0 auto; }
+    .tab-header { display: flex; justify-content: center; gap: 10px; }
+    .tab-button { background-color: #f1f1f1; border: 1px solid #ccc; padding: 8px 16px; cursor: pointer; border-radius: 4px 4px 0 0; font-size: 14px; }
+    .tab-button.active { background-color: #fff; border-bottom: 2px solid #3b82f6; font-weight: bold; }
+    .tab-button:hover { background-color: #e0e0e0; }
+    .tab-content { border: 1px solid #ccc; border-top: none; padding: 10px; background-color: #fff; border-radius: 0 0 4px 4px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .tab-pane select { width: 100%; max-width: 100%; box-sizing: border-box; }
+    .tab-pane form { display: flex; flex-direction: column; align-items: center; }
+    .info.legend { background-color: rgba(255, 255, 255, 0.9); padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-size: 12px; line-height: 18px; }
+    .info.legend i { width: 18px; height: 18px; float: left; margin-right: 8px; display: inline-block; }
+    .info.legend div { margin-bottom: 4px; }
+</style>
+
+<script>
+    function openTab(tabName) {
+        document.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.style.display = 'none';
+            pane.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        const pane = document.getElementById(tabName);
+        pane.style.display = 'block';
+        pane.classList.add('active');
+        const button = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+        if (button) button.classList.add('active');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        openTab('statistics');
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => openTab(button.getAttribute('data-tab')));
+        });
+    });
+</script>
+{% endblock %}
+
+{% block scripts %}
+    <script>const hereURL = "{% static 'core/' %}"</script>
+    <script src="{% static 'core/cart_v2.js' %}"></script>
+{% endblock %}
+
+{% block extra_header %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
+    <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
+{% endblock %}

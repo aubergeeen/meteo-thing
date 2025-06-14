@@ -1,0 +1,142 @@
+{% extends 'core/base2.html' %}
+{% load static %}
+
+{% block title %}Табличка{% endblock %}
+
+{% block extra_header %}
+    <style>
+        select, button { 
+            padding: 8px; 
+            margin-right: 10px; 
+        }
+        select {
+            border: 1px solid #ddd; /* Add border to distinguish from background */
+            border-radius: 4px; /* Slight rounding for consistency with buttons */
+        }
+        table { 
+            min-height: 200px; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+            width: 100%; 
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: left; 
+        }
+        th { 
+            background-color: #f2f2f2; 
+        }
+        td { 
+            font-size: 0.9em; 
+        }
+        .table-responsive {
+            overflow-x: auto; /* Ensure table is scrollable on small screens */
+        }
+        /* Additional styles for download button and format selector */
+        #download-btn {
+            background-color: #218838; /* Green to differentiate from load button */
+            color: white;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        #download-btn:hover {
+            background-color: #218838; /* Darker green on hover */
+        }
+        #format-select {
+            padding: 8px;
+            margin-right: 10px;
+        }
+        /* Flexbox for control layout */
+        .controls {
+            display: flex;
+            justify-content: space-between; /* Push download controls to the right */
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .left-controls {
+            display: flex;
+            align-items: center;
+        }
+        .right-controls {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="controls">
+        <div class="left-controls">
+            <select id="station-select">
+                {% for station in stations %}
+                    <option value="{{ station.station_id }}">{{ station.name }}</option>
+                {% endfor %}
+            </select>
+            
+            <select id="time-step" class="form-control">
+                <option value="1w" selected>Неделя</option>
+                <option value="1d">День</option>
+                <option value="1m">Месяц</option>
+            </select>
+            
+            <button id="load-btn" class="bg-red-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Загрузить</button>
+        </div>
+        
+        <div class="right-controls">
+            <select id="format-select">
+                <option value="csv" selected>CSV</option>
+                <option value="xlsx">XLSX</option>
+            </select>
+            
+            <button id="download-btn">Скачать таблицу</button>
+        </div>
+    </div>
+    
+    <div class="table-responsive">
+        <table id="data-table" class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Дата (Неделя)</th>
+                    <th>Температура (°C)</th>
+                    <th>Влажность (%)</th>
+                    <th>Осадки (мм)</th>
+                    <th>Скорость ветра (м/с)</th>
+                    <th>UTCI (°C)</th>
+                    <th>WBGT (°C)</th>
+                    <th>CWSI</th>
+                    <th>Индекс жары</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Fake weekly data for Пермь -->
+                <tr>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                    <td> </td>
+                </tr>
+
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="loading-spinner" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Загрузка...</span>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'stations/loadup2.js' %}"></script>
+{% endblock %}

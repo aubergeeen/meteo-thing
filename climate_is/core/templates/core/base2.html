@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}My Climate Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/style.css' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'core/favicon.png' %}">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    {% block extra_header %}{% endblock %}
+</head>
+
+<body>
+    <div class="whaa">
+        <header>
+            <nav class="navbar">
+                <a href={% url 'dud' %}>главная</a>
+                <a href={% url 'map_dud' %}>картограммы</a>
+                <a href={% url 'table_dud' %}>таблицы</a>
+                <a href={% url 'graph' %}>графики</a>
+                <a href={% url 'admin:index' %}>вход</a>
+            </nav>
+        </header>
+
+        <main>
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+    <footer>
+        <p>&copy; 2025 Моя Штукенция</p>
+    </footer>
+</body>
+<!-- Include JS files -->
+{% block scripts %}{% endblock %}
+</html>
