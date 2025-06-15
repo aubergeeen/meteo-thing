@@ -8,15 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBtn.addEventListener('click', async () => {
         const stationSelect = document.getElementById('station-select');
         const timeStepSelect = document.getElementById('time-step');
-        const stationId = stationSelect.value || "1"; // Default to Пермь - Гайва
+        const stationId = stationSelect.value || "day"; // по умолчанию Пермь
         const timeStep = timeStepSelect.value;
-
-        // Show loading spinner
         loadingSpinner.style.display = 'block';
         tableBody.innerHTML = ''; // Clear table
 
         try {
-            const response = await fetch(`/api/weather/?station_id=${stationId}&time_step=${timeStep}`);
+            const response = await fetch(`/api/aggregate/?station_id=${stationId}&period=${timeStep}`);
             if (!response.ok) throw new Error('Failed to fetch data');
             const data = await response.json();
 
@@ -28,9 +26,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update table
             data.forEach(item => {
                 const row = document.createElement('tr');
-                const dateKey = timeStep === '1w' ? 'date_range' : 'date';
+                if (timeStep === 'month') { // Месячный период
+                    dateDisplay = item.date.split('-').slice(0, 2).join('-'); // Оставляем только год-месяц
+                } else if (timeStep === 'week') {
+                    dateDisplay = item.date_range; // Для недели используем диапазон
+                } else {
+                    dateDisplay = item.date; // Для дня полная дата
+                }
+                //const dateKey = timeStep === 'week' ? 'date_range' : 'date';
                 row.innerHTML = `
-                    <td>${item[dateKey]}</td>
+                    <td>${dateDisplay}</td>
                     <td>${item.temperature.toFixed(1)}</td>
                     <td>${item.humidity.toFixed(1)}</td>
                     <td>${item.precipitation.toFixed(1)}</td>
@@ -57,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const stationSelect = document.getElementById('station-select');
         const stationName = stationSelect.options[stationSelect.selectedIndex].text;
         const timeStep = document.getElementById('time-step').value;
-        const timeStepText = timeStep === '1w' ? 'Неделя' : timeStep === '1d' ? 'День' : 'Месяц';
+        const timeStepText = timeStep === 'week' ? 'Неделя' : timeStep === 'day' ? 'День' : 'Месяц';
         const filename = `Weather_${stationName}_${timeStepText}.${format}`;
 
         // Get table data

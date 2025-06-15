@@ -1,8 +1,11 @@
 from django.db import models
 from django.utils import timezone
-from stations.models import Sensor  # импортируем модель Датчик из модуля stations
+from stations.models import Sensor  
 from django.db.models import Avg, Max, Min, Sum, Count, F
-from django.db.models.functions import TruncWeek, TruncDay, TruncMonth, TruncYear
+from django.db.models.functions import TruncWeek, TruncDay, TruncMonth, TruncYear, Coalesce, Concat
+from django.db.models.expressions import ExpressionWrapper, Case, When, Value, Subquery
+from django.db.models import FloatField, CharField
+from datetime import timedelta
 
 class ReadingQuerySet(models.QuerySet):
     # TOTAL !! все станции в кучу, группировка по интервалу времени
@@ -32,6 +35,179 @@ class ReadingQuerySet(models.QuerySet):
             .annotate(value=aggregation('value'))                   # avg('value') as 'value'                 
             .order_by('time_period')                                # сортировка
         )
+    
+    def time_aggregates_by_code(self, sensor_ids, param_code, aggregate_func='avg', period='day'):
+        # Агрегация данных по коду параметра для списка датчиков
+        aggregates = {'avg': Avg, 'min': Min, 'max': Max}
+        period_functions = {'day': TruncDay, 'week': TruncWeek, 'month': TruncMonth, 'year': TruncYear}
+        
+        if aggregate_func.lower() not in aggregates:
+            raise ValueError(f"Unsupported aggregate function: {aggregate_func}")
+        if period.lower() not in period_functions:
+            raise ValueError(f"Unsupported time period: {period}")
+        
+        trunc_func = period_functions[period.lower()]
+        aggregation = aggregates[aggregate_func.lower()]
+        
+        return (
+            self
+            .filter(
+                sensor__sensor_id__in=sensor_ids,
+                sensor__sensor_model__param_type__code=param_code
+            )
+            .annotate(period=trunc_func('timestamp'))
+            .values('period')
+            .annotate(value=aggregation('value'))
+            .order_by('period')
+        )
+
+    # Вычисляет UTCI на основе агрегированного QuerySet
+    def get_utci(self, qs):
+        return qs.annotate(
+            utci=ExpressionWrapper(
+                Coalesce(F('temperature'), Value(0.0)) +
+                0.1 * Coalesce(F('humidity'), Value(0.0)) - Value(5.0),
+                output_field=FloatField()
+            )
+        )
+    
+    # Вычисляет WBGT на основе агрегированного QuerySet
+    def get_wbgt(self, qs):
+        return qs.annotate(
+            wbgt=ExpressionWrapper(
+                0.7 * Coalesce(F('temperature'), Value(0.0)) +
+                0.3 * Coalesce(F('humidity'), Value(0.0)) / 100.0,
+                output_field=FloatField()
+            )
+        )
+
+    def get_cwsi(self, qs):
+        return qs.annotate(
+            cwsi=ExpressionWrapper(
+                Case(
+                    When(humidity__lt=100, then=(
+                        Coalesce(F('temperature'), Value(0.0)) - Value(20.0)
+                    ) / (
+                        Value(100.0) - Coalesce(F('humidity'), Value(0.0))
+                    )),
+                    default=Value(0.5),
+                    output_field=FloatField()
+                ),
+                output_field=FloatField()
+            )
+        )
+
+    def get_heat_index(self, qs):
+        return qs.annotate(
+            heat_index=ExpressionWrapper(
+                Coalesce(F('temperature'), Value(0.0)) +
+                0.5 * (
+                    Coalesce(F('humidity'), Value(0.0)) / 100.0
+                ) * (
+                    Coalesce(F('temperature'), Value(0.0)) - Value(26.0)
+                ),
+                output_field=FloatField()
+            )
+        )
+
+    def aggregate_with_indices(self, sensor_ids, period='day', aggregate_func='avg'):
+        # 1. Проверка и подготовка параметров
+        if not sensor_ids:
+            return []
+
+        aggregates = {'avg': Avg, 'min': Min, 'max': Max}
+        period_functions = {
+            'day': TruncDay,
+            'week': TruncWeek, 
+            'month': TruncMonth,
+            'year': TruncYear
+        }
+
+        try:
+            trunc_func = period_functions[period.lower()]
+            agg_func = aggregates[aggregate_func.lower()]
+        except KeyError as e:
+            raise ValueError(f"Неподдерживаемый параметр: {str(e)}")
+
+        # 2. Базовый запрос с фильтрацией и группировкой по времени
+        base_qs = (
+            self.filter(sensor__sensor_id__in=sensor_ids)
+            .annotate(period=trunc_func('timestamp'))
+        )
+
+        # 3. Аннотации для каждого параметра
+        param_annotations = {
+            'temperature': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='TEMP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'humidity': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='HUM', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'precipitation': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='PRECIP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'wind_speed': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='WS', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            )
+        }
+
+        # 4. Применяем аннотации и группируем
+        aggregated_qs = (
+            base_qs.values('period')
+            .annotate(**param_annotations)
+            .order_by('period')
+        )
+
+        # 5. Вычисляем индексы
+        qs_with_indices = self.get_utci(aggregated_qs)
+        qs_with_indices = self.get_wbgt(qs_with_indices)
+        qs_with_indices = self.get_cwsi(qs_with_indices)
+        qs_with_indices = self.get_heat_index(qs_with_indices)
+
+        # 6. Форматируем результат
+        result = []
+        for item in qs_with_indices:
+            formatted_item = {
+                'date': item['period'].strftime('%Y-%m-%d'),
+                'temperature': round(float(item['temperature']), 1),
+                'humidity': round(float(item['humidity']), 1),
+                'precipitation': round(float(item['precipitation']), 2),
+                'wind_speed': round(float(item['wind_speed']), 1),
+                'utci': round(float(item['utci']), 1),
+                'wbgt': round(float(item['wbgt']), 1),
+                'cwsi': round(float(item['cwsi']), 2),
+                'heat_index': round(float(item['heat_index']), 1),
+            }
+
+            # Добавляем диапазон дат для недельного периода
+            if period == 'week':
+                start_date = item['period']
+                end_date = start_date + timedelta(days=6)
+                formatted_item['date_range'] = (
+                    f"{start_date.strftime('%Y-%m-%d')} - "
+                    f"{end_date.strftime('%Y-%m-%d')}"
+                )
+
+            result.append(formatted_item)
+
+        return result
+
 
 class ReadingManager(models.Manager):
     def get_queryset(self):
@@ -39,6 +215,24 @@ class ReadingManager(models.Manager):
 
     def time_aggregates(self, *args, **kwargs):
         return self.get_queryset().time_aggregates(*args, **kwargs)
+    
+    def time_aggregates_by_code(self, *args, **kwargs):
+        return self.get_queryset().time_aggregates_by_code(*args, **kwargs)
+
+    def aggregate_with_indices(self, *args, **kwargs):
+        return self.get_queryset().aggregate_with_indices(*args, **kwargs)
+
+    def get_utci(self, *args, **kwargs):
+        return self.get_queryset().get_utci(*args, **kwargs)
+
+    def get_wbgt(self, *args, **kwargs):
+        return self.get_queryset().get_wbgt(*args, **kwargs)
+
+    def get_cwsi(self, *args, **kwargs):
+        return self.get_queryset().get_cwsi(*args, **kwargs)
+
+    def get_heat_index(self, *args, **kwargs):
+        return self.get_queryset().get_heat_index(*args, **kwargs)
 
 class Reading(models.Model):
     objects = ReadingManager()

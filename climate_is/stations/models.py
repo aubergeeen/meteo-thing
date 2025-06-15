@@ -67,6 +67,11 @@ class ParameterType(models.Model):
         max_length=20,
         help_text="Ед. измерения"
     )
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Аббревиация"
+    )
     class Meta:
         db_table = "Parameters"
         verbose_name = "Тип метеопараметра"
