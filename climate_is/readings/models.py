@@ -2,10 +2,10 @@ from django.db import models
 from django.utils import timezone
 from stations.models import Sensor  
 from django.db.models import Avg, Max, Min, Sum, Count, F
-from django.db.models.functions import TruncWeek, TruncDay, TruncMonth, TruncYear, Coalesce, Concat
+from django.db.models.functions import ExtractMonth, ExtractDay, ExtractYear, Trunc, TruncWeek, TruncDay, TruncMonth, TruncYear, Coalesce, Concat
 from django.db.models.expressions import ExpressionWrapper, Case, When, Value, Subquery
 from django.db.models import FloatField, CharField
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 class ReadingQuerySet(models.QuerySet):
     # TOTAL !! все станции в кучу, группировка по интервалу времени
@@ -38,7 +38,8 @@ class ReadingQuerySet(models.QuerySet):
     
     def time_aggregates_by_code(self, sensor_ids, param_code, aggregate_func='avg', period='day'):
         # Агрегация данных по коду параметра для списка датчиков
-        aggregates = {'avg': Avg, 'min': Min, 'max': Max}
+        # Let's assume что данные об осадках в мм даются каждые 12 ч (иначе думать про кумулятивность(( )
+        aggregates = {'avg': Avg, 'min': Min, 'max': Max, 'sum': Sum}
         period_functions = {'day': TruncDay, 'week': TruncWeek, 'month': TruncMonth, 'year': TruncYear}
         
         if aggregate_func.lower() not in aggregates:
@@ -59,6 +60,95 @@ class ReadingQuerySet(models.QuerySet):
             .values('period')
             .annotate(value=aggregation('value'))
             .order_by('period')
+        )
+    
+    def seasonal_aggregates(self, sensor_ids, param_code, cycle, year_start, year_end):
+        if cycle not in ['daily', 'monthly', 'yearly']:
+            raise ValueError(f"Unsupported cycle: {cycle}")
+
+        annotations = {}
+        group_fields = []
+        cycle_label = None
+
+        if cycle == 'daily':
+            annotations['month'] = ExtractMonth('timestamp')
+            annotations['day'] = ExtractDay('timestamp')
+            group_fields = ['month', 'day']
+            cycle_label = Concat(
+                #LPad(ExtractMonth('timestamp'), 2, Value('0')),
+                ExtractMonth('timestamp'),
+                Value('-'),
+                #LPad(ExtractDay('timestamp'), 2, Value('0')),
+                ExtractDay('timestamp'),
+                output_field=CharField()
+            )
+        elif cycle == 'monthly':
+            annotations['month'] = ExtractMonth('timestamp')
+            group_fields = ['month']
+            # тупо лол 
+            cycle_label = Case(
+                When(month=1, then=Value('Январь')),
+                When(month=2, then=Value('Февраль')),
+                When(month=3, then=Value('Март')),
+                When(month=4, then=Value('Апрель')),
+                When(month=5, then=Value('Май')),
+                When(month=6, then=Value('Июнь')),
+                When(month=7, then=Value('Июль')),
+                When(month=8, then=Value('Август')),
+                When(month=9, then=Value('Сентябрь')),
+                When(month=10, then=Value('Октябрь')),
+                When(month=11, then=Value('Ноябрь')),
+                When(month=12, then=Value('Декабрь')),
+                output_field=CharField()
+            )
+        else:  # yearly
+            annotations['year'] = ExtractYear('timestamp')
+            group_fields = ['year']
+            cycle_label = Concat(
+                ExtractYear('timestamp'),
+                output_field=CharField()
+            )
+
+        return (
+            self.filter(
+                sensor__sensor_id__in=sensor_ids,
+                sensor__sensor_model__param_type__code=param_code,
+                timestamp__year__gte=year_start,
+                timestamp__year__lte=year_end
+            )
+            .annotate(**annotations)
+            .annotate(cycle_label=cycle_label)
+            .values('cycle_label', *group_fields)
+            .annotate(value=Avg('value'))
+            .order_by(*group_fields)
+        )
+    
+    def climate_normals(self, sensor_ids, param_code, period='monthly', baseline_start=2005, baseline_end=2025):
+        if period.lower() not in ['monthly', 'daily']:
+            raise ValueError(f"Unsupported period for normals: {period}")
+
+        annotations = {}
+        group_fields = []
+
+        if period.lower() == 'monthly':
+            annotations['month'] = ExtractMonth('timestamp')
+            group_fields = ['month']
+        else:  # daily
+            annotations['month'] = ExtractMonth('timestamp')
+            annotations['day'] = ExtractDay('timestamp')
+            group_fields = ['month', 'day']
+
+        return (
+            self.filter(
+                sensor__sensor_id__in=sensor_ids,
+                sensor__sensor_model__param_type__code=param_code,
+                timestamp__year__gte=baseline_start,
+                timestamp__year__lte=baseline_end
+            )
+            .annotate(**annotations)
+            .values(*group_fields)
+            .annotate(normal_value=Avg('value'))
+            .order_by(*group_fields)
         )
 
     # Вычисляет UTCI на основе агрегированного QuerySet
@@ -111,7 +201,6 @@ class ReadingQuerySet(models.QuerySet):
         )
 
     def aggregate_with_indices(self, sensor_ids, period='day', aggregate_func='avg'):
-        # 1. Проверка и подготовка параметров
         if not sensor_ids:
             return []
 
@@ -129,13 +218,11 @@ class ReadingQuerySet(models.QuerySet):
         except KeyError as e:
             raise ValueError(f"Неподдерживаемый параметр: {str(e)}")
 
-        # 2. Базовый запрос с фильтрацией и группировкой по времени
         base_qs = (
             self.filter(sensor__sensor_id__in=sensor_ids)
             .annotate(period=trunc_func('timestamp'))
         )
 
-        # 3. Аннотации для каждого параметра
         param_annotations = {
             'temperature': Coalesce(
                 agg_func(Case(
@@ -167,20 +254,18 @@ class ReadingQuerySet(models.QuerySet):
             )
         }
 
-        # 4. Применяем аннотации и группируем
         aggregated_qs = (
             base_qs.values('period')
             .annotate(**param_annotations)
             .order_by('period')
         )
 
-        # 5. Вычисляем индексы
         qs_with_indices = self.get_utci(aggregated_qs)
         qs_with_indices = self.get_wbgt(qs_with_indices)
         qs_with_indices = self.get_cwsi(qs_with_indices)
         qs_with_indices = self.get_heat_index(qs_with_indices)
 
-        # 6. Форматируем результат
+        # Форматируем результат
         result = []
         for item in qs_with_indices:
             formatted_item = {
@@ -208,6 +293,108 @@ class ReadingQuerySet(models.QuerySet):
 
         return result
 
+    def aggregate_with_selected_index(self, sensor_ids, index_name, period, year_start, year_end, aggregate_func='avg'):
+        if not sensor_ids:
+            return []
+
+        aggregates = {'avg': Avg, 'min': Min, 'max': Max}
+        period_functions = {
+            'day': TruncDay,
+            'week': TruncWeek,
+            'month': TruncMonth,
+            'year': TruncYear
+        }
+
+        index_map = {
+            'utci': self.get_utci,
+            'wbgt': self.get_wbgt,
+            'cwsi': self.get_cwsi,
+            'heat_index': self.get_heat_index
+        }
+
+        try:
+            trunc_func = period_functions[period.lower()]
+            agg_func = aggregates[aggregate_func.lower()]
+            index_func = index_map[index_name.lower()]
+        except KeyError as e:
+            raise ValueError(f"Неподдерживаемый параметр: {str(e)}")
+
+        base_qs = (
+            self.filter(
+                sensor__sensor_id__in=sensor_ids,
+                timestamp__year__gte=year_start,
+                timestamp__year__lte=year_end
+            )
+            .annotate(period=trunc_func('timestamp'))
+        )
+
+        param_annotations = {
+            'temperature': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='TEMP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'humidity': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='HUM', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'precipitation': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='PRECIP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            ),
+            'wind_speed': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='WS', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0)
+            )
+        }
+
+        aggregated_qs = (
+            base_qs.values('period')
+            .annotate(**param_annotations)
+            .order_by('period')
+        )
+
+        qs_with_index = index_func(aggregated_qs)
+
+        result = []
+        for item in qs_with_index:
+            formatted_item = {
+                'date': item['period'],
+                'value': round(float(item[index_name]), 2)
+            }
+
+            if period != 'day':
+                start_date = item['period']  
+                if period == 'week':
+                    end_date = start_date + timedelta(days=6)
+                elif period == 'month':
+                    # Переходим к первому дню следующего месяца и отнимаем 1 день
+                    next_month = start_date.replace(day=1, month=start_date.month % 12 + 1)
+                    if next_month.month == 1:
+                        next_month = next_month.replace(year=start_date.year + 1)
+                    end_date = next_month - timedelta(days=1)
+                else:  # year
+                    end_date = datetime(start_date.year, 12, 31)
+                
+                formatted_item['date_range'] = (
+                    f"{start_date.strftime('%Y-%m-%d')} - "
+                    f"{end_date.strftime('%Y-%m-%d')}"
+                )
+
+            result.append(formatted_item)
+
+        return result
 
 class ReadingManager(models.Manager):
     def get_queryset(self):
@@ -233,6 +420,15 @@ class ReadingManager(models.Manager):
 
     def get_heat_index(self, *args, **kwargs):
         return self.get_queryset().get_heat_index(*args, **kwargs)
+    
+    def seasonal_aggregates(self, *args, **kwargs):
+        return self.get_queryset().seasonal_aggregates(*args, **kwargs)
+    
+    def aggregate_with_selected_index(self, *args, **kwargs):
+        return self.get_queryset().aggregate_with_selected_index(*args, **kwargs)
+
+    def climate_normals(self, *args, **kwargs):
+        return self.get_queryset().climate_normals(*args, **kwargs)
 
 class Reading(models.Model):
     objects = ReadingManager()

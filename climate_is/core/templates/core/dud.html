@@ -78,7 +78,6 @@
         
         .graph-footer button:hover {
             background-color: rgb(173, 28, 28);
-
         }
         
         .container {
@@ -97,7 +96,6 @@
             justify-content: center;
         }
         
-        /* Styling for Leaflet popup */
         .station-popup .leaflet-popup-content-wrapper {
             border-radius: 8px;
             box-shadow: 0 3px 14px rgba(0,0,0,0.2);
@@ -174,96 +172,140 @@
     </div>
 
     <script>
-        // Fetch climate data from the endpoint
-        fetch('/api/climate-data/')
-            .then(response => response.json())
-            .then(data => {
-                // Generate tick values for every 3rd day
-                const tickIndices = Array.from({ length: Math.ceil(data.dates.length / 3) }, (_, i) => i * 3);
-                const tickValues = tickIndices.map(i => data.dates[i]);
+        const fetchClimateData = async () => {
+            const paramsTemp = new URLSearchParams({
+                station_id: '',
+                parameter: 'TEMP',
+                aggregate: 'avg',
+                show_norm: 'true',
+                date_start: '2024-03-01',
+                date_end:'2024-03-30'
+            });
 
-                // Temperature graph
-                const tempTrace1 = {
-                    x: data.dates,
-                    y: data.temperature.climate_norm,
-                    name: 'Климатическая норма<br>(1995-2025)',
-                    line: {
-                        color: 'rgb(55, 128, 191)',
-                        width: 3,
-                        dash: 'dot'
-                    }
-                };
+            const paramsPrecip = new URLSearchParams({
+                station_id: '',
+                parameter: 'PRECIP',
+                aggregate: 'sum',
+                show_norm: 'true',
+                date_start: '2024-03-01',
+                date_end:'2024-03-30'
+            });
 
-                const tempTrace2 = {
-                    x: data.dates,
-                    y: data.temperature.actual,
-                    name: 'Реальная температура',
-                    line: {
-                        color: 'rgb(255, 65, 54)',
-                        width: 3
-                    }
-                };
+            try {
+                const [tempResponse, precipResponse] = await Promise.all([
+                    fetch(`/api/weather/dashboard/?${paramsTemp}`),
+                    fetch(`/api/weather/dashboard/?${paramsPrecip}`)
+                ]);
 
-                const tempData = [tempTrace1, tempTrace2];
+                if (!tempResponse.ok || !precipResponse.ok) {
+                    throw new Error(`Ошибка API: ${tempResponse.status} или ${precipResponse.status}`);
+                }
 
-                const tempLayout = {
-                    title: 'Daily Temperature Comparison (°C)',
-                    xaxis: {
-                        title: 'Date',
-                        tickangle: -45,
-                        type: 'category',
-                        tickvals: tickValues,
-                        ticktext: tickValues
-                    },
-                    yaxis: {
-                        title: 'Temperature (°C)'
-                    },
-                    hovermode: 'closest'
-                };
+                const tempData = await tempResponse.json();
+                const precipData = await precipResponse.json();
 
-                Plotly.newPlot('temperatureGraph', tempData, tempLayout);
+                return { tempData, precipData };
+            } catch (error) {
+                console.error('Ошибка при получении данных:', error);
+                return null;
+            }
+        };
 
-                // Precipitation graph
-                const precipTrace1 = {
-                    x: data.dates,
-                    y: data.precipitation.climate_norm,
-                    name: 'Климатическая норма<br>(1995-2025)',
-                    type: 'bar',
-                    marker: {
-                        color: 'rgba(55, 128, 191, 0.7)'
-                    }
-                };
+        fetchClimateData().then(data => {
+            if (!data) return;
 
-                const precipTrace2 = {
-                    x: data.dates,
-                    y: data.precipitation.actual,
-                    name: 'Реальные осадки',
-                    type: 'bar',
-                    marker: {
-                        color: 'rgba(0, 128, 0, 0.7)'
-                    }
-                };
+            const { tempData, precipData } = data;
 
-                const precipData = [precipTrace1, precipTrace2];
+            // Temperature graph
+            const tempTrace1 = {
+                x: tempData.map(d => d.date),
+                y: tempData.map(d => d.normal_value),
+                name: 'Климатическая норма<br>(1995-2025)',
+                line: {
+                    color: 'rgb(55, 128, 191)',
+                    width: 3,
+                    dash: 'dot'
+                }
+            };
 
-                const precipLayout = {
-                    title: 'Daily Precipitation Comparison (mm)',
-                    xaxis: {
-                        title: 'Date',
-                        tickangle: -45,
-                        type: 'category',
-                        tickvals: tickValues,
-                        ticktext: tickValues
-                    },
-                    yaxis: {
-                        title: 'Precipitation (mm)'
-                    },
-                    barmode: 'group'
-                };
+            const tempTrace2 = {
+                x: tempData.map(d => d.date),
+                y: tempData.map(d => d.value),
+                name: 'Реальная температура',
+                line: {
+                    color: 'rgb(255, 65, 54)',
+                    width: 3
+                }
+            };
 
-                Plotly.newPlot('precipitationGraph', precipData, precipLayout);
-            })
-            .catch(error => console.error('Error fetching climate data:', error));
+            //Plotly.newPlot('temperatureGraph', [tempTrace1, tempTrace2], tempLayout);
+
+            // Precipitation graph
+            const precipTrace1 = {
+                x: precipData.map(d => d.date),
+                y: precipData.map(d => d.normal_value),
+                name: 'Климатическая норма<br>(1995-2025)',
+                type: 'bar',
+                marker: {
+                    color: 'rgba(55, 128, 191, 0.7)'
+                }
+            };
+
+            const precipTrace2 = {
+                x: precipData.map(d => d.date),
+                y: precipData.map(d => d.value),
+                name: 'Реальные осадки',
+                type: 'bar',
+                marker: {
+                    color: 'rgba(0, 128, 0, 0.7)'
+                }
+            };
+            
+            const commonLayoutOptions = {
+                legend: {
+                    orientation: "h",  // горизонтальное расположение
+                    y: -0.3,          // отрицательное значение опускает легенду ниже графика
+                    x: 0.5,           // центрирование по горизонтали
+                    xanchor: 'center' // привязка к центру
+                },
+                margin: {
+                    b: 100            // увеличиваем нижний отступ для места под легенду
+                }
+            };
+
+            // Для температурного графика
+            const tempLayout = {
+                ...commonLayoutOptions,
+                title: 'Daily Temperature Comparison (°C)',
+                xaxis: {
+                    title: 'Date',
+                    tickangle: -45,
+                    tickformat: '%d %b'
+                },
+                yaxis: {
+                    title: 'Temperature (°C)'
+                },
+                hovermode: 'closest'
+            };
+
+            // Для графика осадков
+            const precipLayout = {
+                ...commonLayoutOptions,
+                title: 'Daily Precipitation Comparison (mm)',
+                xaxis: {
+                    title: 'Date',
+                    tickangle: -45,
+                    tickformat: '%d %b'
+                },
+                yaxis: {
+                    title: 'Precipitation (mm)'
+                },
+                barmode: 'group'
+            };
+
+            Plotly.newPlot('temperatureGraph', [tempTrace1, tempTrace2], tempLayout);
+            Plotly.newPlot('precipitationGraph', [precipTrace1, precipTrace2], precipLayout);
+        });
     </script>
 {% endblock %}
 

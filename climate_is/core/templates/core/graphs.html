@@ -23,125 +23,95 @@
             <div class="tab-content" style="width: 100%;">
                 <!-- Вкладка 1: Временной ряд и STL -->
                 <div id="statistics" class="tab-pane active">
-                    <form id="statistics-form" style="text-align: center; width: 100%;">
-                        <label for="station-select-statistics">Метеостанция</label>
-                        <select id="station-select-statistics" class="form-select">
-                            <option value="">Среднее по всем станциям</option>
-                            <!-- Заполняется через /api/stations/locate/?fields=station_id,name -->
+                    <form id="statistics-form">
+                        <select id="station-select-statistics" name="station_id" class="form-select">
+                            <option value="">По всем станциям</option>
                         </select>
-                        <label for="parameter-select-statistics">Параметр</label>
-                        <select id="parameter-select-statistics" class="form-select">
+                        <select id="parameter-select-statistics" name="parameter" class="form-select">
                             <option value="TEMP">Температура (°C)</option>
                             <option value="HUM">Влажность (%)</option>
                             <option value="PRECIP">Осадки (мм)</option>
-                            <option value="WIND">Скорость ветра (м/с)</option>
+                            <option value="WS">Скорость ветра (м/с)</option>
                         </select>
-                        <label for="aggregate-select-statistics">Агрегация</label>
-                        <select id="aggregate-select-statistics" class="form-select">
+                        <select id="aggregate-select-statistics" name="aggregate" class="form-select">
                             <option value="avg">Среднее</option>
                             <option value="min">Минимум</option>
                             <option value="max">Максимум</option>
                         </select>
-                        <label for="period-select-statistics">Период</label>
-                        <select id="period-select-statistics" class="form-select">
-                            <option value="1d">Дневной</option>
-                            <option value="1w">Недельный</option>
-                            <option value="1m">Месячный</option>
-                            <option value="1y">Годовой</option>
+                        <select id="period-select-statistics" name="period" class="form-select">
+                            <option value="day">Дневной</option>
+                            <option value="week">Недельный</option>
+                            <option value="month">Месячный</option>
+                            <option value="year">Годовой</option>
                         </select>
-                        <label for="year-start-statistics">С</label>
-                        <select id="year-start-statistics" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}">{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-start-statistics" name="year_start" class="form-select">
+                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
-                        <label for="year-end-statistics">По</label>
-                        <select id="year-end-statistics" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-end-statistics" name="year_end" class="form-select">
+                            {% for year in years %}<option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>{% endfor %}
                         </select>
+                        <input type="checkbox" id="show-norm-statistics" name="show_norm" class="form-checkbox">
+                        <label for="show-norm-statistics">Показать климатическую норму</label>
+                        <input type="checkbox" id="show-stl-statistics" name="show_stl" class="form-checkbox">
                         <label for="show-stl-statistics">Показать STL</label>
-                        <input type="checkbox" id="show-stl-statistics" class="form-checkbox">
                         <button type="submit" class="form-button">ОК</button>
                     </form>
                 </div>
                 <!-- Вкладка 2: Сезонный ряд -->
-                <div id="seasonal" class="tab-pane" style="display: none;">
-                    <form id="seasonal-form" style="text-align: center; width: 100%;">
-                        <label for="station-select-seasonal">Метеостанция</label>
-                        <select id="station-select-seasonal" class="form-select">
-                            <option value="">Среднее по всем станциям</option>
-                            <!-- Заполняется через /api/stations/locate/?fields=station_id,name -->
+                <div id="seasonal" class="tab-pane">
+                    <form id="seasonal-form">
+                        <select id="station-select-seasonal" name="station_id" class="form-select">
+                            <option value="">По всем станциям</option>
                         </select>
-                        <label for="parameter-select-seasonal">Параметр</label>
-                        <select id="parameter-select-seasonal" class="form-select">
+                        <select id="parameter-select-seasonal" name="parameter" class="form-select">
                             <option value="TEMP">Температура (°C)</option>
                             <option value="HUM">Влажность (%)</option>
                             <option value="PRECIP">Осадки (мм)</option>
-                            <option value="WIND">Скорость ветра (м/с)</option>
+                            <option value="WS">Скорость ветра (м/с)</option>
                         </select>
-                        <label for="cycle-select-seasonal">Цикл</label>
-                        <select id="cycle-select-seasonal" class="form-select">
+                        <select id="cycle-select-seasonal" name="cycle" class="form-select">
                             <option value="daily">Дневной</option>
                             <option value="monthly">Месячный</option>
                             <option value="yearly">Годовой</option>
                         </select>
-                        <label for="year-start-seasonal">С</label>
-                        <select id="year-start-seasonal" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}">{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-start-seasonal" name="year_start" class="form-select">
+                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
-                        <label for="year-end-seasonal">По</label>
-                        <select id="year-end-seasonal" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-end-seasonal" name="year_end" class="form-select">
+                            {% for year in years %}<option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>{% endfor %}
                         </select>
+                        <input type="checkbox" id="trend-seasonal" name="show_trend" class="form-checkbox">
                         <label for="trend-seasonal">Показать тренд</label>
-                        <input type="checkbox" id="trend-seasonal" class="form-checkbox">
+                        <input type="checkbox" id="anomaly-seasonal" name="show_anomalies" class="form-checkbox">
                         <label for="anomaly-seasonal">Показать аномалии</label>
-                        <input type="checkbox" id="anomaly-seasonal" class="form-checkbox">
                         <button type="submit" class="form-button">ОК</button>
                     </form>
                 </div>
                 <!-- Вкладка 3: Климатические индексы -->
-                <div id="indexes" class="tab-pane" style="display: none;">
-                    <form id="indexes-form" style="text-align: center; width: 100%;">
-                        <label for="station-select-indexes">Метеостанция</label>
-                        <select id="station-select-indexes" class="form-select">
-                            <option value="">Среднее по всем станциям</option>
-                            <!-- Заполняется через /api/stations/locate/?fields=station_id,name -->
+                <div id="indexes" class="tab-pane">
+                    <form id="indexes-form">
+                        <select id="station-select-indexes" name="station_id" class="form-select">
+                            <option value="">По всем станциям</option>
                         </select>
-                        <label for="index-select-indexes">Индекс</label>
-                        <select id="index-select-indexes" class="form-select">
+                        <select id="index-select-indexes" name="index" class="form-select">
                             <option value="utci">UTCI (Тепловой комфорт)</option>
                             <option value="wbgt">WBGT (Температура по влажному термометру)</option>
                             <option value="cwsi">CWSI (Индекс водного стресса)</option>
                             <option value="heat_index">Heat Index (Индекс жары)</option>
                         </select>
-                        <label for="period-select-indexes">Период</label>
-                        <select id="period-select-indexes" class="form-select">
-                            <option value="1d">Дневной</option>
-                            <option value="1w">Недельный</option>
-                            <option value="1m">Месячный</option>
-                            <option value="1y">Годовой</option>
+                        <select id="period-select-indexes" name="period" class="form-select">
+                            <option value="day">Дневной</option>
+                            <option value="week">Недельный</option>
+                            <option value="month">Месячный</option>
+                            <option value="year">Годовой</option>
                         </select>
-                        <label for="year-start-indexes">С</label>
-                        <select id="year-start-indexes" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}">{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-start-indexes" name="year_start" class="form-select">
+                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
-                        <label for="year-end-indexes">По</label>
-                        <select id="year-end-indexes" class="form-select">
-                            {% for year in years %}
-                            <option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>
-                            {% endfor %}
+                        <select id="year-end-indexes" name="year_end" class="form-select">
+                            {% for year in years %}<option value="{{ year }}" {% if year == 2025 %}selected{% endif %}>{{ year }}</option>{% endfor %}
                         </select>
-                        <label for="vis-type-indexes">Тип визуализации</label>
-                        <select id="vis-type-indexes" class="form-select">
+                        <select id="vis-type-indexes" name="vis_type" class="form-select">
                             <option value="line">Линейный график</option>
                             <option value="heatmap">Тепловая карта</option>
                         </select>
@@ -161,7 +131,7 @@
     .tab-button:hover { background-color: #e0e0e0; }
     .tab-content { border: 1px solid #ccc; border-top: none; padding: 20px; background-color: #fff; border-radius: 0 0 4px 4px; }
     .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
+    .tab-pane.active { display: block !important; } /* Повышаем приоритет */
     .form-select, .form-input { width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
     .form-checkbox { margin-bottom: 12px; margin-right: 8px; }
     .form-button { background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }

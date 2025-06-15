@@ -1,127 +1,281 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabPanes = document.querySelectorAll('.tab-pane');
+    // Инициализация вкладок
+    const tabs = document.querySelectorAll('.tab-button');
+    const panes = document.querySelectorAll('.tab-pane');
 
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabPanes.forEach(pane => pane.style.display = 'none');
+    // Функция загрузки метеостанций
+    const loadStations = async () => {
+        try {
+            const response = await fetch('/api/locate/?fields=station_id,name');
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+            const stations = await response.json();
 
-            button.classList.add('active');
-            const tabId = button.getAttribute('data-tab');
-            document.getElementById(tabId).style.display = 'block';
+            const stationSelects = document.querySelectorAll('[id^=station-select]');
+            stationSelects.forEach(select => {
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+                stations.forEach(station => {
+                    const option = document.createElement('option');
+                    option.value = station.station_id;
+                    option.textContent = station.name;
+                    select.appendChild(option);
+                });
+            });
+        } catch (error) {
+            console.error('Ошибка при загрузке метеостанций:', error);
+        }
+    };
+
+    // Функция инициализации формы для активной вкладки
+    const initializeForm = async (paneId) => {
+        await loadStations();
+        const form = document.querySelector(`#${paneId} form`);
+        if (form) {
+            form.reset();
+        }
+    };
+
+    // Обработчик переключения вкладок
+    tabs.forEach(tab => {
+        tab.addEventListener('click', async () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            panes.forEach(p => p.classList.remove('active'));
+
+            tab.classList.add('active');
+            const pane = document.getElementById(tab.dataset.tab);
+            pane.classList.add('active');
+
+            await initializeForm(tab.dataset.tab);
         });
     });
 
-    // Form submission handler
-    const forms = [
-        { id: 'statistics-form', tab: 'statistics' },
-        { id: 'seasonal-form', tab: 'seasonal' },
-        { id: 'indexes-form', tab: 'indexes' }
-    ];
+    // Инициализация при загрузке страницы
+    initializeForm('statistics');
 
-    forms.forEach(({ id, tab }) => {
-        const form = document.getElementById(id);
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+    // Функция построения графика
+    const plotGraph = (data, layout, type = 'scatter') => {
+        const config = {
+            responsive: true,
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'plot',
+                height: 500,
+                width: 800,
+                scale: 1
+            }
+        };
+        Plotly.newPlot('plotly-graph', data, layout, config);
+    };
 
-            let params = {
-                tab,
-                year_start: form.querySelector(`#year-start-${tab}`).value,
-                year_end: form.querySelector(`#year-end-${tab}`).value
+    // Обработчик формы временного ряда
+    document.getElementById('statistics-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        formData.forEach((value, key) => {
+            if (form[key].type !== 'checkbox' || form[key].checked) {
+                params.append(key, value);
+            }
+        });
+
+        try {
+            const response = await fetch(`/api/weather/timeseries/?${params}`);
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+            const data = await response.json();
+
+            const traces = [{
+                x: data.map(d => d.date),
+                y: data.map(d => d.value),
+                mode: 'lines',
+                name: formData.get('parameter')
+            }];
+
+            if (formData.get('show_norm') === 'on') {
+                traces.push({
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.normal_value),
+                    mode: 'lines',
+                    name: 'Климатическая норма',
+                    line: { dash: 'dash', color: 'purple' }
+                });
+            }
+
+            if (formData.get('show_stl') === 'on') {
+                traces.push({
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.seasonal),
+                    mode: 'lines',
+                    name: 'Сезонность'
+                }, {
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.trend),
+                    mode: 'lines',
+                    name: 'Тренд'
+                }, {
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.residual),
+                    mode: 'lines',
+                    name: 'Остатки'
+                });
+            }
+
+            const layout = {
+                title: `Временной ряд: ${formData.get('parameter')}`,
+                xaxis: { title: 'Дата' },
+                yaxis: { title: 'Значение' }
             };
 
-            if (tab === 'statistics') {
-                params.parameter = form.querySelector('#parameter-select-statistics').value;
-            } else if (tab === 'indexes') {
-                params.parameter = form.querySelector('#index-select-indexes').value;
-                params.threshold = form.querySelector('#threshold-indexes').value;
-            } else {
-                // Seasonal tab (no API support yet)
-                alert('Данные для сезонного анализа недоступны');
-                return;
-            }
+            plotGraph(traces, layout);
+        } catch (error) {
+            console.error('Ошибка при построении графика:', error);
+        }
+    });
 
-            try {
-                const query = new URLSearchParams(params).toString();
-                const response = await fetch(`/api/graph-data/?${query}`);
-                if (!response.ok) throw new Error('Failed to fetch data');
-                const data = await response.json();
-
-                if (data.months.length === 0) {
-                    alert('Нет данных для выбранной комбинации');
-                    return;
-                }
-
-                // Prepare Plotly data
-                const plotData = [
-                    {
-                        x: data.months,
-                        y: tab === 'indexes' ? data.cdd : data.temperatures,
-                        type: 'scatter',
-                        mode: 'lines+markers',
-                        name: tab === 'indexes' ? 'CDD' : 'Фактическая температура',
-                        marker: { color: '#3b82f6', size: 8 },
-                        line: { color: '#3b82f6', width: 2 }
-                    },
-                    {
-                        x: data.months,
-                        y: data.climate_norm,
-                        type: 'scatter',
-                        mode: 'lines',
-                        name: 'Климатическая норма',
-                        marker: { color: '#ef4444', size: 8 },
-                        line: { color: '#ef4444', width: 2, dash: 'dash' },
-                        visible: tab === 'statistics' && document.getElementById('show-norm').checked
-                    }
-                ];
-
-                // Update layout
-                const layout = {
-                    title: {
-                        text: tab === 'indexes'
-                            ? `Градусо-дни охлаждения (порог ${params.threshold}°C), ${params.year_start}–${params.year_end}`
-                            : `Среднемесячная температура (°C), ${params.year_start}–${params.year_end}`,
-                        font: { size: 18 }
-                    },
-                    xaxis: {
-                        title: 'Месяц',
-                        tickangle: 45,
-                        automargin: true
-                    },
-                    yaxis: {
-                        title: tab === 'indexes' ? 'CDD (°C)' : 'Температура (°C)'
-                    },
-                    margin: { t: 50, b: 100, l: 50, r: 50 },
-                    showlegend: true,
-                    legend: {
-                        x: 1,
-                        y: 1,
-                        xanchor: 'right',
-                        yanchor: 'top'
-                    }
-                };
-
-                // Render graph
-                Plotly.newPlot('plotly-graph', plotData, layout);
-
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                alert('Ошибка загрузки данных. Подробности в консоли.');
+    // Обработчик формы сезонного ряда
+    document.getElementById('seasonal-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        formData.forEach((value, key) => {
+            if (form[key].type !== 'checkbox' || form[key].checked) {
+                params.append(key, value);
             }
         });
+
+        try {
+            const response = await fetch(`/api/weather/seasonal/?${params}`);
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+            const data = await response.json();
+
+            const traces = [{
+                x: data.map(d => d.date),
+                y: data.map(d => d.value),
+                mode: 'lines',
+                name: formData.get('parameter')
+            }];
+
+            if (formData.get('show_trend') === 'on') {
+                traces.push({
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.trend),
+                    mode: 'lines',
+                    name: 'Тренд'
+                });
+            }
+
+            if (formData.get('show_anomalies') === 'on') {
+                const anomalyData = data.filter(d => d.anomaly);
+                traces.push({
+                    x: anomalyData.map(d => d.date),
+                    y: anomalyData.map(d => d.value),
+                    mode: 'markers',
+                    name: 'Аномалии',
+                    marker: { size: 10, color: 'red' }
+                });
+            }
+
+            const layout = {
+                title: `Сезонный ряд: ${formData.get('parameter')}`,
+                xaxis: { title: 'Цикл' },
+                yaxis: { title: 'Значение' }
+            };
+
+            plotGraph(traces, layout);
+        } catch (error) {
+            console.error('Ошибка при построении графика:', error);
+        }
     });
 
-    // Toggle climate norm visibility (Statistics tab only)
-    document.getElementById('show-norm').addEventListener('change', function() {
-        const isChecked = this.checked;
-        Plotly.restyle('plotly-graph', { visible: isChecked ? true : false }, [1]);
+    // Обработчик формы индексов
+    document.getElementById('indexes-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        formData.forEach((value, key) => {
+            if (form[key].type !== 'checkbox' || form[key].checked) {
+                params.append(key, value);
+            }
+        });
+
+        try {
+            const response = await fetch(`/api/weather/indexes/?${params}`);
+            if (!response.ok) {
+                throw new Error(`Ошибка API: ${response.status}`);
+            }
+            const data = await response.json();
+
+            let traces, layout;
+            if (formData.get('vis_type') === 'heatmap') {
+                const dates = [...new Set(data.map(d => d.date.split('T')[0]))];
+                const values = data.map(d => d.value);
+                traces = [{
+                    z: [values],
+                    x: dates,
+                    y: [formData.get('index').toUpperCase()],
+                    type: 'heatmap',
+                    colorscale: 'Viridis'
+                }];
+                layout = {
+                    title: `Тепловая карта: ${formData.get('index').toUpperCase()}`,
+                    xaxis: { title: 'Дата' },
+                    yaxis: { title: 'Индекс' }
+                };
+            } else {
+                traces = [{
+                    x: data.map(d => d.date),
+                    y: data.map(d => d.value),
+                    mode: 'lines',
+                    name: formData.get('index').toUpperCase(),
+                    text: data.map(d => d.date_range || '')
+                }];
+                layout = {
+                    title: `Климатический индекс: ${formData.get('index').toUpperCase()}`,
+                    xaxis: { title: 'Дата' },
+                    yaxis: { title: 'Значение' }
+                };
+            }
+
+            plotGraph(traces, layout, formData.get('vis_type') === 'heatmap' ? 'heatmap' : 'scatter');
+
+            const tableBody = document.getElementById('indexes-table-body');
+            if (tableBody) {
+                tableBody.innerHTML = '';
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="border px-4 py-2">${item.date.split('T')[0]}</td>
+                        <td class="border px-4 py-2">${item.value.toFixed(2)}</td>
+                        <td class="border px-4 py-2">${item.date_range || '-'}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                document.getElementById('indexes-table').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Ошибка при построении графика:', error);
+        }
     });
 
-    // Download PNG
-    document.getElementById('download-png').addEventListener('click', function() {
-        const title = document.querySelector('.plotly-graph-div .gtitle')?.textContent || 'graph';
-        Plotly.downloadImage('plotly-graph', { format: 'png', filename: title.replace(/[^a-zA-Z0-9]/g, '_') });
+    // Скачивание PNG
+    document.getElementById('download-png').addEventListener('click', () => {
+        Plotly.downloadImage('plotly-graph', {
+            format: 'png',
+            width: 800,
+            height: 500,
+            filename: 'plot'
+        });
     });
 });
