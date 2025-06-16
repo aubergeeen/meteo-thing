@@ -64,7 +64,7 @@
                         </div>
                         <div class="flex items-center mb-3">
                             <input type="checkbox" id="show-stl-statistics" name="show_stl" class="mr-2">
-                            <label for="show-stl-statistics" class="text-sm">Показать STL</label>
+                            <label for="show-stl-statistics" class="text-sm">Показать STL <span class="text-gray-300">(займет время)</span> </label>
                         </div>
                         <button type="submit" class="form-button">ОК</button>
                     </form>
@@ -100,7 +100,7 @@
                             <option value="11">Ноябрь</option>
                             <option value="12">Декабрь</option>
                         </select>
-                        <input type="number" id="day-select-seasonal" name="target_day" class="form-select" style="display: none;" min="1" max="31" placeholder="День (1-31)" required>
+                        <input type="number" id="day-select-seasonal" name="target_day" class="form-select" style="display: none;" min="1" max="31" placeholder="День (1-31)">
                         <select id="year-start-seasonal" name="year_start" class="form-select">
                             {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>

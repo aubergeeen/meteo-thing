@@ -11,7 +11,7 @@ def dud(request):
 
 def choropleth_ver2(request):
     months = [{'value': i, 'name': name} for i, name in enumerate(['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'], 1)]
-    years = range(2005, timezone.now().year + 1)
+    years = range(2010, timezone.now().year + 1)
     data = ParameterType.objects.all().values('param_id', 'name')  # получаем поля id и name всех станций из таблицы
     #template = loader.get_template('core/choropleth.html')
     return render(request, 'core/choropl_ver2.html', {'params': data, 'months':months, 'years':years})
