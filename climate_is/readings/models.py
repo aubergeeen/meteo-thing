@@ -706,6 +706,11 @@ class Reading(models.Model):
         db_table = "Readings"
         verbose_name = "Наблюдение"
         verbose_name_plural = "Наблюдения"
+        indexes = [ # индексация - может так будет быстрее??
+            models.Index(fields=['timestamp'], name='readings_timestamp_idx'),
+            models.Index(fields=['sensor_id'], name='readings_sensor_id_idx'),
+            models.Index(fields=['sensor_id', 'timestamp'], name='readings_sensor_timestamp_idx'),
+        ]
     def __str__(self):
         return f"{self.sensor.station_id}\t{self.sensor.sensor_model.param_type}\t{self.timestamp}:\t{self.value}" 
     

@@ -50,6 +50,10 @@ class Station(models.Model):
         db_table = "Stations"
         verbose_name = "Метеостанция"
         verbose_name_plural = "Метеостанции"
+        indexes = [
+            models.Index(fields=['latitude', 'longitude'], name='stations_lat_lon_idx'),
+            models.Index(fields=['name'], name='stations_name_idx'),
+        ]
     def __str__(self):
         return f"({self.station_id}) {self.name}"
 
@@ -109,6 +113,9 @@ class SensorSeries(models.Model):
         db_table = "Sensor_Series"
         verbose_name = "Модель датчика"
         verbose_name_plural = "Модели датчиков"
+        indexes = [
+            models.Index(fields=['param_type_id'], name='sensor_series_param_type_idx'),
+        ]
     def __str__(self):
         return f"{self.series_name} - {self.param_type})"
 
@@ -136,6 +143,11 @@ class Sensor(models.Model):
         db_table = "Sensors"
         verbose_name = "Датчик"
         verbose_name_plural = "Датчики"
+        indexes = [
+            models.Index(fields=['station_id'], name='sensors_station_id_idx'),
+            models.Index(fields=['sensor_model_id'], name='sensors_model_id_idx'),
+            models.Index(fields=['station_id', 'sensor_model_id'], name='sensors_station_model_idx'),
+        ]
     
     def __str__(self):
         return f"{self.sensor_id}"
