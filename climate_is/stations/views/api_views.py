@@ -144,7 +144,7 @@ class StationParamReadingsAPIView(APIView):
                     })
                     
             except Exception as e:
-                #logger.error(f"Ошибка обработки наблюдения: {str(e)}", exc_info=True)
+
                 errors.append({
                     'input': reading_data,
                     'error': f"Ошибка обработки: {str(e)}"

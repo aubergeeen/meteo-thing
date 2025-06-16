@@ -55,6 +55,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализация при загрузке страницы
     initializeForm('statistics');
 
+    // Функция валидации диапазона годов
+    const validateYearRange = (formData) => {
+        const yearStart = parseInt(formData.get('year_start'), 10);
+        const yearEnd = parseInt(formData.get('year_end'), 10);
+
+        if (yearStart && yearEnd && yearStart > yearEnd) {
+            alert('Ошибка: "Год от" не может быть больше "Года до".');
+            return false;
+        }
+        return true;
+    };
+
     // Функция построения графика
     const plotGraph = (data, layout, type = 'scatter') => {
         const config = {
@@ -75,8 +87,13 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const form = e.target;
         const formData = new FormData(form);
+
+        // Проверка диапазона годов
+        if (!validateYearRange(formData)) {
+            return;
+        }
+
         const params = new URLSearchParams();
-        
         formData.forEach((value, key) => {
             if (form[key].type !== 'checkbox' || form[key].checked) {
                 params.append(key, value);
@@ -143,8 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const form = e.target;
         const formData = new FormData(form);
+
+        // Проверка диапазона годов
+        if (!validateYearRange(formData)) {
+            return;
+        }
+
         const params = new URLSearchParams();
-        
         formData.forEach((value, key) => {
             if (form[key].type !== 'checkbox' || form[key].checked) {
                 params.append(key, value);
@@ -202,8 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const form = e.target;
         const formData = new FormData(form);
+
+        // Проверка диапазона годов
+        if (!validateYearRange(formData)) {
+            return;
+        }
+
         const params = new URLSearchParams();
-        
         formData.forEach((value, key) => {
             if (form[key].type !== 'checkbox' || form[key].checked) {
                 params.append(key, value);
@@ -277,5 +304,43 @@ document.addEventListener('DOMContentLoaded', () => {
             height: 500,
             filename: 'plot'
         });
+    });
+
+    // Динамическая валидация диапазона годов
+    const yearStartSelects = document.querySelectorAll('[id^=year-start]');
+    const yearEndSelects = document.querySelectorAll('[id^=year-end]');
+
+    yearStartSelects.forEach((startSelect, index) => {
+        const endSelect = yearEndSelects[index];
+        const validateOnChange = () => {
+            const yearStart = parseInt(startSelect.value, 10);
+            const yearEnd = parseInt(endSelect.value, 10);
+            const submitButton = startSelect.closest('form').querySelector('.form-button');
+            const existingErrors = endSelect.parentNode.querySelectorAll('.error-message');
+
+            // Удаляем все существующие сообщения об ошибке
+            existingErrors.forEach(error => error.remove());
+
+            if (yearStart && yearEnd && yearStart > yearEnd) {
+                submitButton.disabled = true;
+                startSelect.style.borderColor = 'red';
+                endSelect.style.borderColor = 'red';
+                
+                // Добавляем только одно сообщение об ошибке
+                const error = document.createElement('div');
+                error.className = 'error-message';
+                error.style.color = 'red';
+                error.style.fontSize = '12px';
+                error.textContent = 'Ошибка: "Год начала" не может быть больше "Года конца".';
+                endSelect.parentNode.insertBefore(error, endSelect.nextSibling);
+            } else {
+                submitButton.disabled = false;
+                startSelect.style.borderColor = '';
+                endSelect.style.borderColor = '';
+            }
+        };
+
+        startSelect.addEventListener('change', validateOnChange);
+        endSelect.addEventListener('change', validateOnChange);
     });
 });
