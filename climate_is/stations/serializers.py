@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Station, Sensor, ParameterType, SensorSeries
 from readings.models import Reading
+from django.utils import timezone
 
 class StationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -115,3 +116,24 @@ class DashboardResponseSerializer(serializers.Serializer):
     date = serializers.DateTimeField()
     value = serializers.FloatField()
     normal_value = serializers.FloatField(required=False)
+
+class CartogramSerializer(serializers.Serializer):
+    parameter = serializers.ChoiceField(choices=['TEMP', 'HUM', 'PRECIP', 'WS', 'utci', 'wbgt', 'cwsi', 'heat_index', 'hdd', 'cdd'])
+    aggregate = serializers.ChoiceField(choices=['avg', 'min', 'max', 'sum', 'anom'])
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    year = serializers.IntegerField(min_value=2005, required=False, allow_null=True)
+    zero_missing = serializers.BooleanField(default=False)
+
+    def validate(self, data):
+        invalid_sum_params = ['HUM', 'hdd', 'cdd', 'utci', 'wbgt', 'cwsi', 'heat_index']
+        if data['parameter'] in invalid_sum_params and data['aggregate'] == 'sum':
+            raise serializers.ValidationError(f"Sum aggregation is not supported for {data['parameter']}")
+        # if data['parameter'] in ['hdd', 'cdd'] and data['aggregate'] != 'sum':
+        #     raise serializers.ValidationError(f"Only sum aggregation is supported for {data['parameter']}")
+        if data.get('year') and data['year'] > timezone.now().year:
+            raise serializers.ValidationError("Year cannot be in the future")
+        return data
+
+class CartogramResponseSerializer(serializers.Serializer):
+    station = serializers.IntegerField()
+    value = serializers.FloatField(allow_null=True)

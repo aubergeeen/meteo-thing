@@ -5,10 +5,13 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     margin: 0;
+    position: relative; 
+    padding-bottom: 60px;
 }
 .whaa {
     margin: 0;
     bottom: 0;
+
 }
 
 header {
@@ -61,8 +64,10 @@ main {
 footer {
     position: fixed;
     bottom: 0;
+    bottom: 0;
     left:0;
     width: 100%;
     display: flex;
     justify-content: center;
+    z-index: 100;
 }

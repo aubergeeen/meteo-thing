@@ -65,7 +65,7 @@
             flex: 1;
         }
         
-        .graph-footer button {
+        .graph-footer a.button {
             padding: 8px 16px;
             background-color: rgb(255, 0, 0);
             color: white;
@@ -76,7 +76,7 @@
             margin-right: 10px;
         }
         
-        .graph-footer button:hover {
+        .graph-footer a.button:hover {
             background-color: rgb(173, 28, 28);
         }
         
@@ -131,6 +131,22 @@
         .leaflet-control-attribution {
             display: none;
         }
+        .container {
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #insert-map-here {
+            height: 600px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin: 0 auto; 
+            width: 95%; 
+        }
         
         @media (max-width: 600px) {
             .station-popup .leaflet-popup-content {
@@ -155,14 +171,14 @@
             <div id="temperatureGraph" class="graph"></div>
             <div class="graph-footer">
                 <p>График показывает сравнение реальной температуры с климатической нормой (1995–2025) для Пермского края.</p>
-                <button>Далее</button>
+                <a href="{% url 'graph' %}" class="button">Далее</a>
             </div>
         </div>
         <div class="graph-wrapper">
             <div id="precipitationGraph" class="graph"></div>
             <div class="graph-footer">
                 <p>График отображает сравнение фактических осадков с климатической нормой (1995–2025) для Пермского края.</p>
-                <button>Далее</button>
+                <a href="{% url 'graph' %}" class="button">Далее</a>
             </div>
         </div>
     </div>
@@ -187,8 +203,8 @@
                 parameter: 'PRECIP',
                 aggregate: 'sum',
                 show_norm: 'true',
-                date_start: '2024-03-01',
-                date_end:'2024-03-30'
+                date_start: '2025-05-15',
+                date_end:'2025-06-16'
             });
 
             try {
@@ -222,7 +238,7 @@
                 y: tempData.map(d => d.normal_value),
                 name: 'Климатическая норма<br>(1995-2025)',
                 line: {
-                    color: 'rgb(55, 128, 191)',
+                    color: 'rgb(82, 191, 55)',
                     width: 3,
                     dash: 'dot'
                 }
@@ -233,7 +249,7 @@
                 y: tempData.map(d => d.value),
                 name: 'Реальная температура',
                 line: {
-                    color: 'rgb(255, 65, 54)',
+                    color: 'rgb(255, 126, 35)',
                     width: 3
                 }
             };
@@ -247,7 +263,7 @@
                 name: 'Климатическая норма<br>(1995-2025)',
                 type: 'bar',
                 marker: {
-                    color: 'rgba(55, 128, 191, 0.7)'
+                    color: 'rgba(233, 23, 0, 0.7)'
                 }
             };
 
@@ -257,7 +273,7 @@
                 name: 'Реальные осадки',
                 type: 'bar',
                 marker: {
-                    color: 'rgba(0, 128, 0, 0.7)'
+                    color: 'rgba(255, 149, 137, 0.7)'
                 }
             };
             

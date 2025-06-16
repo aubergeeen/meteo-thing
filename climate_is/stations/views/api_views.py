@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-from stations.serializers import StationSerializer, SensorSerializer, ParameterTypeSerializer, SensorSeriesSerializer, DashboardSerializer, \
+from stations.serializers import StationSerializer, SensorSerializer, ParameterTypeSerializer, SensorSeriesSerializer, DashboardSerializer, CartogramSerializer, CartogramResponseSerializer, \
     SeasonalResponseSerializer, SeasonalSerializer, TimeSeriesResponseSerializer, TimeSeriesSerializer, IndexesResponseSerializer, IndexesSerializer, DashboardResponseSerializer
 from stations.models import Station, Sensor, ParameterType, SensorSeries
 from readings.models import Reading
@@ -43,7 +43,9 @@ class SensorSeriesViewSet(viewsets.ReadOnlyModelViewSet):
 def get_stats_per_station(request):
     station_id = request.GET.get('station_id', '1')
     period = request.GET.get('period', 'day')
-    aggregate_func = request.GET.get('agg', 'avg') 
+    aggregate_func = request.GET.get('agg', 'avg')
+    start_date = request.GET.get('start_date', None)
+    end_date = request.GET.get('end_date', None) 
 
     # Проверка допустимых функций агрегации
     valid_aggregates = {'avg', 'min', 'max'}
@@ -56,7 +58,8 @@ def get_stats_per_station(request):
         sensor_ids = station.sensors.values_list('sensor_id', flat=True)
 
         # Получаем агрегированные данные и индексы
-        data = Reading.objects.aggregate_with_indices(sensor_ids, period=period, aggregate_func=aggregate_func)
+        data = Reading.objects.aggregate_with_indices(sensor_ids, period=period, aggregate_func=aggregate_func, 
+                                                      start_date=start_date, end_date=end_date)
         return JsonResponse(data, safe=False)
     except Station.DoesNotExist:
         return JsonResponse({'error': f'Station {station_id} not found'}, status=404)
@@ -385,61 +388,25 @@ class DashboardAPIView(APIView):
             return Response(response_serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-# '''
-# Возвращает статистику (сред, мин, макс)
-# по интервалу (день, неделя, месяц, год)
-# для выбранного параметра (по полю param id)
-# агрегировано по станции??
-# '''
-# @api_view(['GET'])
-# def aggregate_param_interval(request):
-#     field = request.query_params.get('field', '1')
-#     interval = request.query_params.get('interval', 'day')
-    
-# #def time_aggregates(queryset, param_type, aggregate_func='avg', period='week'):
 
+class CartogramAPIView(APIView):
+    def get(self, request):
+        serializer = CartogramSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            param_code = data['parameter']
+            year = data['year'] if data['year'] is not None else timezone.now().year
 
-#вспомогательная ф-я, получает ДЛИТЕЛЬНУЮ АГРЕГИРОВАННУЮ статистику выбранного метеопараметра для конкретного датчика
-# def fetch_param_stat(sensor_ids, param_name, trunc_func):
-#     param_type = ParameterType.objects.get(name=param_name)     # получаем ORM метеопараметра по названию
-#     sensors_specific = Sensor.objects.filter(sensor_id__in=sensor_ids, sensor_model__param_type=param_type).select_related('param_type')
-#     # наблюдения, отфильтрованные по станции и типу датчика
-#     readings = (
-#         Reading.objects.filter(sensor__in=sensors_specific.values_list('sensor_id', flat=True))
-#         .annotate(period=trunc_func('timestamp'))   # обрезаем время => period
-#         .values('period')                           # группируем по period
-#         .annotate(avg_value=Avg('value'))           # вычисляем avg 
-#     )
-#     result = {}
-#     for r in readings:
-#         result[r['period'].isoformat()] = r['avg_value']
-#     return result
-
-
-# @api_view(['GET'])
-# def get_stats_over_time(request):
-#     picked_station = request.GET.get('station')
-#     step_str = request.GET.get('step', '1d')    # шаг передается как 1d - день, 1w - неделя, 1m - месяц
-
-#     the_station = Station.objects.get(pk=picked_station)        # получаем ORM выбранной станцию
-#     sensor_qs = the_station.sensors.all()                       # queryset множества датчиков станции (через related_name)
-#     sensor_ids = sensor_qs.values_list('sensor_id', flat=True)  # список id датчиков - для передачи в ф-ю
-
-#     trunc_map = {'1d': TruncDay, '1w': TruncWeek, '1m': TruncMonth}     
-#     trunc_func = trunc_map.get(step_str, TruncDay)                          # получаем функцию для обрезки timestamp
-    
-#     temp_data = fetch_param_stat(sensor_ids, 'Температура воздуха', trunc_func)     # статистика для температуры     
-#     humidity_data = fetch_param_stat(sensor_ids, 'Относительная влажность', trunc_func)    # статистика для влажности
-
-#     # Объединяем результаты
-#     all_periods = set(temp_data.keys()) | set(humidity_data.keys()) # собираем темп и влаж по одному периоду в один ряд
-#     data = []
-#     for period in sorted(all_periods):
-#         data.append({
-#             'date': period,
-#             'avg_t': temp_data.get(period),
-#             'avg_h': humidity_data.get(period),
-#         })
-
-#     return JsonResponse(data, safe=False)
+            result = Reading.objects.cartogram_aggregates(
+                param_code=param_code,
+                aggregate_func=data['aggregate'],
+                month=data['month'],
+                year=year,
+                zero_missing=data['zero_missing']
+            )
+            
+            response_serializer = CartogramResponseSerializer(result, many=True)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

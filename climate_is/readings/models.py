@@ -1,8 +1,8 @@
 from django.db import models
 from django.utils import timezone
-from stations.models import Sensor  
+from stations.models import Sensor, Station  
 from django.db.models import Avg, Max, Min, Sum, Count, F
-from django.db.models.functions import ExtractMonth, ExtractDay, ExtractYear, Trunc, TruncWeek, TruncDay, TruncMonth, TruncYear, Coalesce, Concat
+from django.db.models.functions import ExtractMonth, ExtractDay, ExtractYear, Trunc, TruncWeek, TruncDay, TruncMonth, TruncYear, Coalesce, Concat, NullIf
 from django.db.models.expressions import ExpressionWrapper, Case, When, Value, Subquery
 from django.db.models import FloatField, CharField
 from datetime import timedelta, datetime
@@ -152,41 +152,93 @@ class ReadingQuerySet(models.QuerySet):
         )
 
     # Вычисляет UTCI на основе агрегированного QuerySet
+    # def get_utci(self, qs):
+    #     return qs.annotate(
+    #         utci=ExpressionWrapper(
+    #             Coalesce(F('temperature'), Value(0.0)) +
+    #             0.1 * Coalesce(F('humidity'), Value(0.0)) - Value(5.0),
+    #             output_field=FloatField()
+    #         )
+    #     )
+
+    # Вычисляет UTCI на основе агрегированного QuerySet   (АППРОКСИМАЦИЯ - НУЖНА РАДИАЦИОННАЯ ТЕМПЕРАТУРА)
     def get_utci(self, qs):
         return qs.annotate(
             utci=ExpressionWrapper(
-                Coalesce(F('temperature'), Value(0.0)) +
-                0.1 * Coalesce(F('humidity'), Value(0.0)) - Value(5.0),
+                Coalesce(F('temperature'), Value(0.0)) + 
+                (Value(0.3) * Coalesce(F('humidity'), Value(0.0)) / Value(100.0) * Coalesce(F('temperature'), Value(0.0))) -
+                (Value(1.5) * Coalesce(F('wind_speed'), Value(0.0))),
                 output_field=FloatField()
             )
         )
-    
-    # Вычисляет WBGT на основе агрегированного QuerySet
-    def get_wbgt(self, qs):
-        return qs.annotate(
-            wbgt=ExpressionWrapper(
-                0.7 * Coalesce(F('temperature'), Value(0.0)) +
-                0.3 * Coalesce(F('humidity'), Value(0.0)) / 100.0,
-                output_field=FloatField()
-            )
-        )
+    # # Вычисляет WBGT на основе агрегированного QuerySet
+    # def get_wbgt(self, qs):
+    #     return qs.annotate(
+    #         wbgt=ExpressionWrapper(
+    #             0.7 * Coalesce(F('temperature'), Value(0.0)) +
+    #             0.3 * Coalesce(F('humidity'), Value(0.0)) / 100.0,
+    #             output_field=FloatField()
+    #         )
+    #     )
+
+    # def get_cwsi(self, qs):
+    #     return qs.annotate(
+    #         cwsi=ExpressionWrapper(
+    #             Case(
+    #                 When(humidity__lt=100, then=(
+    #                     Coalesce(F('temperature'), Value(0.0)) - Value(20.0)
+    #                 ) / (
+    #                     Value(100.0) - Coalesce(F('humidity'), Value(0.0))
+    #                 )),
+    #                 default=Value(0.5),
+    #                 output_field=FloatField()
+    #             ),
+    #             output_field=FloatField()
+    #         )
+    #     )
 
     def get_cwsi(self, qs):
         return qs.annotate(
+            # Упрощенная аппроксимация T_wet (как в WBGT)
+            wet_bulb_temp_approx=ExpressionWrapper(
+                Coalesce(F('temperature'), Value(0.0)) - 
+                (Value(100.0) - Coalesce(F('humidity'), Value(0.0))) / Value(5.0),
+                output_field=FloatField()
+            ),
+            # Аппроксимация T_leaf (+3°C к температуре воздуха)
+            leaf_temp_approx=ExpressionWrapper(
+                Coalesce(F('temperature'), Value(0.0)) + Value(3.0),
+                output_field=FloatField()
+            ),
+            # Расчет CWSI с защитой от деления на 0
             cwsi=ExpressionWrapper(
-                Case(
-                    When(humidity__lt=100, then=(
-                        Coalesce(F('temperature'), Value(0.0)) - Value(20.0)
-                    ) / (
-                        Value(100.0) - Coalesce(F('humidity'), Value(0.0))
-                    )),
-                    default=Value(0.5),
-                    output_field=FloatField()
+                (F('leaf_temp_approx') - F('wet_bulb_temp_approx')) / 
+                NullIf(
+                    F('temperature') - 
+                    F('wet_bulb_temp_approx'),
+                    Value(0.0)
                 ),
                 output_field=FloatField()
             )
         )
-
+    
+    def get_wbgt(self, qs):
+        return qs.annotate(
+            # аппроксимация T_wet 
+            wet_bulb_temp_approx=ExpressionWrapper(
+                Coalesce(F('temperature'), Value(0.0)) - 
+                (Value(100.0) - Coalesce(F('humidity'), Value(0.0))) / Value(5.0),
+                output_field=FloatField()
+            ),
+            # Расчет WBGT
+            wbgt=ExpressionWrapper(
+                Value(0.7) * F('wet_bulb_temp_approx') +
+                Value(0.2) * F('temperature') +
+                Value(0.1) * Coalesce(F('temperature'), Value(0.0)),
+                output_field=FloatField()
+            )
+        )
+    
     def get_heat_index(self, qs):
         return qs.annotate(
             heat_index=ExpressionWrapper(
@@ -199,8 +251,146 @@ class ReadingQuerySet(models.QuerySet):
                 output_field=FloatField()
             )
         )
+    
+    def get_hdd(self, qs):
+        # Heating Degree Days: sum(max(18 - T_avg, 0)) per day
+        return qs.annotate(
+            hdd=ExpressionWrapper(
+                Case(
+                    When(temperature__lt=18.0, then=Value(18.0) - Coalesce(F('temperature'), Value(0.0))),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                ),
+                output_field=FloatField()
+            )
+        )
 
-    def aggregate_with_indices(self, sensor_ids, period='day', aggregate_func='avg'):
+    def get_cdd(self, qs):
+        # Cooling Degree Days: sum(max(T_avg - 24, 0)) per day
+        return qs.annotate(
+            cdd=ExpressionWrapper(
+                Case(
+                    When(temperature__gt=24.0, then=Coalesce(F('temperature'), Value(0.0)) - Value(24.0)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                ),
+                output_field=FloatField()
+            )
+        )
+    
+    def cartogram_aggregates(self, param_code, aggregate_func='avg', month=None, year=None, zero_missing=False):
+        aggregates = {'avg': Avg, 'min': Min, 'max': Max, 'sum': Sum}
+        index_map = {
+            'utci': self.get_utci,
+            'wbgt': self.get_wbgt,
+            'cwsi': self.get_cwsi,
+            'heat_index': self.get_heat_index,
+            'hdd': self.get_hdd,
+            'cdd': self.get_cdd
+        }
+        param_key_map = {'TEMP': 'temperature', 
+                         'HUM': 'humidity', 
+                         'PRECIP': 'precipitation', 
+                         'WS': 'wind speed '}
+        
+        if aggregate_func.lower() not in aggregates and aggregate_func.lower() != 'anom':
+            raise ValueError(f"Unsupported aggregate function: {aggregate_func}")
+        if year is None:
+            year = timezone.now().year        
+        
+        agg_func = aggregates['avg'] if aggregate_func.lower() == 'anom' else aggregates[aggregate_func.lower()]
+
+
+        # Базовый QuerySet с фильтрацией по году и месяцу
+        base_qs = self.filter(
+            timestamp__year=year,
+            timestamp__month=month
+        ).annotate(
+            station_id=F('sensor__station__station_id')
+        )
+
+        # Аннотации для параметров
+        param_annotations = {
+            'temperature': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='TEMP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0) if zero_missing else Value(None)
+            ),
+            'humidity': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='HUM', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0) if zero_missing else Value(None)
+            ),
+            'precipitation': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='PRECIP', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0) if zero_missing else Value(None)
+            ),
+            'wind_speed': Coalesce(
+                agg_func(Case(
+                    When(sensor__sensor_model__param_type__code='WS', then='value'),
+                    output_field=FloatField()
+                )),
+                Value(0.0) if zero_missing else Value(None)
+            )
+        }
+        
+        # Агрегация для обычных параметров или подготовка для индексов
+        if param_code in ['TEMP', 'HUM', 'PRECIP', 'WS']:
+            param_key = param_key_map[param_code]
+            aggregated_qs = (
+                base_qs
+                .values('station_id')
+                .annotate(**{param_key: param_annotations[param_key]})
+                .annotate(value=F(param_key))
+            )
+        elif param_code in index_map:
+            aggregated_qs = (
+                base_qs
+                .values('station_id')
+                .annotate(**param_annotations)
+            )
+            indexed_qs = index_map[param_code](aggregated_qs)
+            aggregated_qs = indexed_qs.annotate(value=F(param_code))
+        else:
+            raise ValueError(f"Unsupported parameter: {param_code}")
+
+        # Обработка аномалий
+        if aggregate_func.lower() == 'anom':
+            normal_qs = self.climate_normals(
+                sensor_ids=Subquery(Sensor.objects.values('sensor_id')),
+                param_code='TEMP' if param_code in index_map else param_code,
+                period='monthly'
+            ).filter(month=month).values('normal_value')
+
+            aggregated_qs = aggregated_qs.annotate(
+                normal_value=Coalesce(
+                    Subquery(normal_qs, output_field=FloatField()),
+                    Value(0.0)
+                ),
+                value=ExpressionWrapper(
+                    F('value') - F('normal_value'),
+                    output_field=FloatField()
+                )
+            )
+
+        return (
+            aggregated_qs
+            .values('station_id')
+            .annotate(
+                station=F('station_id'),
+                value=Coalesce(F('value'), Value(None), output_field=FloatField())
+            )
+            .order_by('station_id')
+        )
+    
+    def aggregate_with_indices(self, sensor_ids, period='day', aggregate_func='avg', start_date=None, end_date=None):
         if not sensor_ids:
             return []
 
@@ -222,6 +412,14 @@ class ReadingQuerySet(models.QuerySet):
             self.filter(sensor__sensor_id__in=sensor_ids)
             .annotate(period=trunc_func('timestamp'))
         )
+
+        # фильтруем по датам (optional)
+        if start_date and end_date:
+            base_qs = base_qs.filter(timestamp__range=(start_date, end_date))
+        elif start_date:
+            base_qs = base_qs.filter(timestamp__gte=start_date) # greater than or equal 
+        elif end_date:
+            base_qs = base_qs.filter(timestamp__lte=end_date)
 
         param_annotations = {
             'temperature': Coalesce(
@@ -429,7 +627,10 @@ class ReadingManager(models.Manager):
 
     def climate_normals(self, *args, **kwargs):
         return self.get_queryset().climate_normals(*args, **kwargs)
-
+    
+    def cartogram_aggregates(self, *args, **kwargs):
+        return self.get_queryset().cartogram_aggregates(*args, **kwargs)
+    
 class Reading(models.Model):
     objects = ReadingManager()
     timestamp = models.DateTimeField(help_text="Дата и время наблюдения")

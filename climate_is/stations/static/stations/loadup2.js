@@ -10,11 +10,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const timeStepSelect = document.getElementById('time-step');
         const stationId = stationSelect.value || "day"; // по умолчанию Пермь
         const timeStep = timeStepSelect.value;
+        const startDateInput = document.getElementById('start-date').value;
+        const endDateInput = document.getElementById('end-date').value;
+
+        // валидация "от" < "до"
+        if (startDateInput && endDateInput && new Date(startDateInput) > new Date(endDateInput)) {
+            alert('Дата начала не может быть позже даты окончания.');
+            return;
+        }
+        
         loadingSpinner.style.display = 'block';
         tableBody.innerHTML = ''; // Clear table
 
         try {
-            const response = await fetch(`/api/aggregate/?station_id=${stationId}&period=${timeStep}`);
+            const response = await fetch(`/api/aggregate/?station_id=${stationId}&period=${timeStep}&start_date=${startDateInput}&end_date=${endDateInput}`);
             if (!response.ok) throw new Error('Failed to fetch data');
             const data = await response.json();
 
@@ -66,7 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const filename = `Weather_${stationName}_${timeStepText}.${format}`;
 
         // Get table data
-        const headers = Array.from(document.querySelectorAll('#data-table th')).map(th => th.textContent);
+        //const headers = Array.from(document.querySelectorAll('#data-table th')).map(th => th.textContent);
+        const headers = ['Date', 'TEMP', 'HUM', 'PREC', 'WIND_SPEED', 'UTCI', 'WBGT', 'CWSI']
         const rows = Array.from(tableBody.querySelectorAll('tr')).map(row =>
             Array.from(row.querySelectorAll('td')).map(td => td.textContent)
         );
@@ -80,19 +90,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Generate CSV
             const csvContent = [
                 headers.join(','),
-                ...rows.map(row => row.join(','))
+                ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
             ].join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const bom = '\uFEFF'; // UTF-8 BOM
+            const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = filename;
             link.click();
         } else if (format === 'xlsx') {
             // Generate XLSX using SheetJS
-            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'WeatherData');
-            XLSX.write(wb, filename, { bookType: 'xlsx', type: 'blob' });
+            var wb = XLSX.utils.table_to_book(document.getElementById("data-table"));
+            XLSX.writeFile(wb, filename);
         }
     });
 });

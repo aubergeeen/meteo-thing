@@ -27,25 +27,24 @@ function style(feature, minVal, maxVal) {
 
 let geojsonLayer = null;
 let currentLegend = null;
-let currentParameter = null;
-let currentPeriod = null;
+let currentParameters = null;
 
-async function updateMap(parameter, period, map, clippedFeatureCollection) {
+async function updateMap(params, map, clippedFeatureCollection) {
     try {
-        const apiUrl = `/api/measurements/?parameter=${parameter}&period=${period}`;
+        const queryString = new URLSearchParams(params).toString();
+        const apiUrl = `/api/weather/cartography/?${queryString}`;
         const measurements = await fetch(apiUrl).then(r => {
-            if (!r.ok) throw new Error('Failed to fetch measurements');
+            if (!r.ok) throw new Error(`Failed to fetch measurements: ${r.statusText}`);
             return r.json();
         });
 
         if (measurements.length === 0) {
-            alert('No data available for this combination');
+            alert('Нет данных для выбранной комбинации');
             return;
         }
 
-        // Store current parameter and period for download
-        currentParameter = parameter;
-        currentPeriod = period;
+        // Store current parameters for download
+        currentParameters = params;
 
         // Map measurements to station IDs
         const measurementMap = {};
@@ -60,7 +59,7 @@ async function updateMap(parameter, period, map, clippedFeatureCollection) {
         });
 
         // Calculate min and max values
-        const values = measurements.map(m => m.value).filter(v => v !== undefined);
+        const values = measurements.map(m => m.value).filter(v => v !== null && v !== undefined);
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
 
@@ -75,11 +74,11 @@ async function updateMap(parameter, period, map, clippedFeatureCollection) {
         }).addTo(map);
 
         // Update legend
-        updateLegend(map, minVal, maxVal, parameter);
+        updateLegend(map, minVal, maxVal, params.parameter);
 
     } catch (error) {
         console.error('Error updating map:', error);
-        alert('Error fetching data. See console for details.');
+        alert('Ошибка при загрузке данных. Подробности в консоли.');
     }
 }
 
@@ -93,7 +92,7 @@ function updateLegend(map, minVal, maxVal, parameter) {
     legend.onAdd = function () {
         const div = L.DomUtil.create('div', 'info legend');
         const grades = getColorBreaks(minVal, maxVal);
-        const unit = parameter.includes('humidity') ? '%' : '°C';
+        const unit = parameter === 'humidity' ? '%' : ['precip', 'hdd', 'cdd'].includes(parameter) ? '' : '°C';
 
         for (let i = 0; i < grades.length; i++) {
             div.innerHTML +=
@@ -106,9 +105,35 @@ function updateLegend(map, minVal, maxVal, parameter) {
     currentLegend = legend;
 }
 
+function updateAggregateOptions(tab) {
+    const parameterSelect = document.getElementById(`parameter-select-${tab}`);
+    const aggregateSelect = document.getElementById(`aggregate-select-${tab}`);
+    const parameter = parameterSelect.value;
+
+    // Enable all options by default
+    Array.from(aggregateSelect.options).forEach(option => {
+        option.disabled = false;
+    });
+
+    if (tab === 'statistics') {
+        aggregateSelect.querySelector('option[value="sum"]').disabled = true;
+        if (parameter === 'PRECIP') {
+            aggregateSelect.querySelector('option[value="sum"]').disabled = false;
+        }
+    } else if (tab === 'indexes') {
+        if (['utci', 'wbgt', 'cwsi', 'heat_index'].includes(parameter)) {
+            aggregateSelect.querySelector('option[value="sum"]').disabled = true;
+        } else if (['hdd', 'cdd'].includes(parameter)) {
+            Array.from(aggregateSelect.options).forEach(option => {
+                option.disabled = option.value !== 'sum';
+            });
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const map = L.map('map', { attributionControl: false, zoomControl: false }).setView([59, 55.7], 7);
+        const map = L.map('map', { attributionControl: false, zoomControl: false }).setView([59, 55.7], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const borderURL = hereURL + 'perm_polygon.json';
@@ -116,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const boundaryCoordsCorrected = boundaryCoords.map(coord => [coord[1], coord[0]]);
         const first = boundaryCoordsCorrected[0];
         const last = boundaryCoordsCorrected[boundaryCoordsCorrected.length - 1];
+        
         if (first[0] !== last[0] || first[1] !== last[1]) {
             boundaryCoordsCorrected.push([first[0], first[1]]);
         }
@@ -188,57 +214,93 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         window.leafletMap = map;
 
-        // OK button event listeners
-        document.querySelectorAll('.tab-pane button').forEach(button => {
-            button.addEventListener('click', async () => {
-                const tab = button.closest('.tab-pane').id;
-                let parameter, period;
+        // Initialize aggregate options
+        updateAggregateOptions('statistics');
+        updateAggregateOptions('indexes');
 
-                if (tab === 'statistics') {
-                    const paramSelect = document.getElementById('parameter-select-statistics').value;
-                    const aggSelect = document.getElementById('aggregate-select-statistics').value;
-                    const periodSelect = document.getElementById('period-select-statistics').value;
-                    parameter = paramSelect === 'temp' ? 'effective_temp' : 'min_humidity';
-                    period = periodSelect;
-                } else if (tab === 'indexes') {
-                    parameter = 'effective_temp';
-                    period = document.getElementById('period-select-indexes').value;
-                }
+        // Parameter change listeners
+        document.getElementById('parameter-select-statistics').addEventListener('change', () => updateAggregateOptions('statistics'));
+        document.getElementById('parameter-select-indexes').addEventListener('change', () => updateAggregateOptions('indexes'));
 
-                await updateMap(parameter, period, map, clippedFeatureCollection);
-            });
+        // Form submission listeners
+        document.getElementById('statistics-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const params = {
+                parameter: document.getElementById('parameter-select-statistics').value,
+                aggregate: document.getElementById('aggregate-select-statistics').value,
+                month: document.getElementById('month-select-statistics').value,
+                year: document.getElementById('year-select-statistics').value,
+                zero_missing: document.getElementById('zero-missing-statistics').checked
+            };
+            await updateMap(params, map, clippedFeatureCollection);
+        });
+
+        document.getElementById('indexes-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const params = {
+                parameter: document.getElementById('parameter-select-indexes').value,
+                aggregate: document.getElementById('aggregate-select-indexes').value,
+                month: document.getElementById('month-select-indexes').value,
+                year: document.getElementById('year-select-indexes').value,
+                zero_missing: document.getElementById('zero-missing-indexes').checked
+            };
+            await updateMap(params, map, clippedFeatureCollection);
         });
 
         // Download PNG button
-        const downloadBtn = document.querySelector('#map-container button');
-        downloadBtn.addEventListener('click', () => {
-            if (!currentParameter || !currentPeriod) {
+        const downloadBtn = document.getElementById('download-btn');
+        downloadBtn.addEventListener('click', async () => {
+            if (!currentParameters) {
                 alert('Сначала выберите данные для отображения на карте');
                 return;
             }
 
-            leafletImage(map, function(err, canvas) {
-                if (err) {
-                    console.error('Error generating map image:', err);
-                    alert('Ошибка при создании изображения карты');
-                    return;
-                }
+            try {
+                // Ensure map is fully rendered
+                map.invalidateSize();
+                //await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for layers to render
 
-                const parameterName = currentParameter === 'effective_temp' ? 'EffectiveTemp' : 'MinHumidity';
+                // Capture map container
+                // const mapElement = document.getElementById('map');
+                // const dataUrl = await domtoimage.toPng(mapElement, {
+                //     quality: 0.8, // Reduce quality for faster rendering
+                //     bgcolor: '#ffffff' // White background
+                // });
+
+                // Get map div dimensions
+                const mapElement = document.getElementById('map');
+                const rect = mapElement.getBoundingClientRect();
+                const width = Math.round(rect.width);
+                const height = Math.round(rect.height);
+
+                // Capture map container with exact dimensions
+                const dataUrl = await domtoimage.toPng(mapElement, {
+                    quality: 0.8, // Balanced quality
+                    bgcolor: '#ffffff', // White background
+                    width: width, // Match div width
+                    height: height // Match div height
+                });
+
+                // Create download link
                 const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-                const periodName = monthNames[parseInt(currentPeriod) - 1] || 'Unknown';
-                const filename = `Map_${parameterName}_${periodName}.png`;
+                const parameterName = currentParameters.parameter || 'Unknown';
+                const periodName = monthNames[parseInt(currentParameters.month) - 1] || 'Unknown';
+                const year = currentParameters.year || new Date().getFullYear();
+                const filename = `Map_${parameterName}_${periodName}_${year}.png`;
 
                 const link = document.createElement('a');
-                link.href = canvas.toDataURL('image/png');
+                link.href = dataUrl;
                 link.download = filename;
                 link.click();
-            });
+            } catch (err) {
+                console.error('Error generating map image:', err);
+                alert('Ошибка при создании изображения карты');
+            }
         });
 
         document.dispatchEvent(new Event('mapInitialized'));
     } catch (error) {
         console.error('Map initialization failed:', error);
-        alert('Error loading map. See console for details.');
+        alert('Ошибка инициализации карты. Подробности в консоли.');
     }
 });

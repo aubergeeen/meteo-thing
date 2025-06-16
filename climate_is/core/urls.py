@@ -3,8 +3,8 @@ from . import views
 #from .views import ClimateDataView, MeasurementListView, WeatherDataView, GraphDataView
 
 urlpatterns = [
-    path("home/", views.thingy, name='mega-thingy'),
-    path("maps/", views.choropleth, name='choropleth'),
+    #path("home/", views.thingy, name='mega-thingy'),
+    #path("maps/", views.choropleth, name='choropleth'),
     path("graph/", views.graphs_view, name='graph'),
     path("", views.dud, name='dud'),
     path("map_dud/", views.choropleth_ver2, name='map_dud'),

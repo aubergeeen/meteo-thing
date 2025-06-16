@@ -10,7 +10,7 @@ router.register(r'sensor_series', api_views.SensorSeriesViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path("table/", web_views.list_of_stations, name='table_thing'),
+    #path("table/", web_views.list_of_stations, name='table_thing'),
     path("aggregate/", api_views.get_stats_per_station, name='api_stat_test'),
     path("locate/", api_views.list_station_locations, name='api_all_loc'),
     path("table_dud/", web_views.table_dud, name='table_dud'),
@@ -18,4 +18,5 @@ urlpatterns = [
     path('weather/seasonal/', api_views.SeasonalAPIView.as_view(), name='seasonal'),
     path('weather/indexes/', api_views.IndexesAPIView.as_view(), name='indexes'),
     path('weather/dashboard/', api_views.DashboardAPIView.as_view(), name='dash-info'),
+    path('weather/cartography/', api_views.CartogramAPIView.as_view(), name='dash-info'),
 ]

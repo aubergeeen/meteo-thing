@@ -5,11 +5,11 @@
 
 {% block extra_header %}
     <style>
-        select, button { 
+        select, button, input[type="date"] { 
             padding: 8px; 
             margin-right: 10px; 
         }
-        select {
+        select, input[type="date"] {
             border: 1px solid #ddd; 
             border-radius: 4px; 
         }
@@ -34,17 +34,6 @@
             overflow-x: auto; 
         }
 
-        #download-btn {
-            background-color: #218838; 
-            font-weight: bold;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            cursor: pointer;
-        }
-        #download-btn:hover {
-            background-color: #218838; 
-        }
         #format-select {
             padding: 8px;
             margin-right: 10px;
@@ -65,6 +54,7 @@
             align-items: center;
         }
     </style>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -83,10 +73,10 @@
             </select>
 
         <div class="date-range">
-            <label for="start-date">От:</label>
+            <label for="start-date">  От:</label>
             <input type="date" id="start-date" class="form-control">
             
-            <label for="end-date">До:</label>
+            <label for="end-date">  До:</label>
             <input type="date" id="end-date" class="form-control">
         </div>            
             <button id="load-btn" class="bg-red-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Загрузить</button>
@@ -98,7 +88,7 @@
                 <option value="xlsx">XLSX</option>
             </select>
             
-            <button id="download-btn">Скачать таблицу</button>
+            <button id="download-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Скачать таблицу</button>
         </div>
     </div>
     
