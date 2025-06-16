@@ -35,6 +35,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = document.querySelector(`#${paneId} form`);
         if (form) {
             form.reset();
+            if (paneId === 'seasonal') {
+                updateSeasonalFieldVisibility();
+            }
+        }
+    };
+
+    // Функция управления видимостью полей в форме seasonal
+    const updateSeasonalFieldVisibility = () => {
+        const cycleSelect = document.getElementById('cycle-select-seasonal');
+        const daySelect = document.getElementById('day-select-seasonal');
+        const monthSelect = document.getElementById('month-select-seasonal');
+
+        if (!cycleSelect || !daySelect || !monthSelect) {
+            console.error('One or more elements not found: cycle-select-seasonal, day-select-seasonal, month-select-seasonal');
+            return;
+        }
+
+        if (cycleSelect.value === 'daily') {
+            daySelect.style.display = 'block';
+            monthSelect.style.display = 'block';
+        } else if (cycleSelect.value === 'monthly') {
+            daySelect.style.display = 'none';
+            monthSelect.style.display = 'block';
         }
     };
 
@@ -54,6 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Инициализация при загрузке страницы
     initializeForm('statistics');
+
+    // Обработчик для изменения цикла в форме seasonal
+    const cycleSelect = document.getElementById('cycle-select-seasonal');
+    if (cycleSelect) {
+        cycleSelect.addEventListener('change', updateSeasonalFieldVisibility);
+    }
 
     // Функция валидации диапазона годов
     const validateYearRange = (formData) => {
@@ -88,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = e.target;
         const formData = new FormData(form);
 
-        // Проверка диапазона годов
         if (!validateYearRange(formData)) {
             return;
         }
@@ -161,9 +189,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = e.target;
         const formData = new FormData(form);
 
-        // Проверка диапазона годов
         if (!validateYearRange(formData)) {
             return;
+        }
+
+        // Валидация target_day для daily цикла
+        if (formData.get('cycle') === 'daily') {
+            const month = parseInt(formData.get('target_month'), 10);
+            const day = parseInt(formData.get('target_day'), 10);
+            const yearStart = parseInt(formData.get('year_start'), 10);
+            if (!month || !day || !yearStart) {
+                alert('Ошибка: Месяц, день и год начала должны быть заполнены.');
+                return;
+            }
+            // Проверяем високосный год для февраля
+            const isLeapYear = (year) => (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+            const maxDays = month === 2 && isLeapYear(yearStart) ? 29 : new Date(2025, month, 0).getDate();
+            if (day < 1 || day > maxDays) {
+                alert(`Ошибка: День должен быть от 1 до ${maxDays} для выбранного месяца.`);
+                return;
+            }
         }
 
         const params = new URLSearchParams();
@@ -176,7 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`/api/weather/seasonal/?${params}`);
             if (!response.ok) {
-                throw new Error(`Ошибка API: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.non_field_errors || `Ошибка API: ${response.status}`);
             }
             const data = await response.json();
 
@@ -216,6 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             plotGraph(traces, layout);
         } catch (error) {
             console.error('Ошибка при построении графика:', error);
+            alert(`Ошибка: ${error.message}`);
         }
     });
 
@@ -225,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = e.target;
         const formData = new FormData(form);
 
-        // Проверка диапазона годов
         if (!validateYearRange(formData)) {
             return;
         }
@@ -318,7 +364,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const submitButton = startSelect.closest('form').querySelector('.form-button');
             const existingErrors = endSelect.parentNode.querySelectorAll('.error-message');
 
-            // Удаляем все существующие сообщения об ошибке
             existingErrors.forEach(error => error.remove());
 
             if (yearStart && yearEnd && yearStart > yearEnd) {
@@ -326,7 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 startSelect.style.borderColor = 'red';
                 endSelect.style.borderColor = 'red';
                 
-                // Добавляем только одно сообщение об ошибке
                 const error = document.createElement('div');
                 error.className = 'error-message';
                 error.style.color = 'red';

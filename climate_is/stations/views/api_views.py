@@ -237,60 +237,60 @@ class TimeSeriesAPIView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class SeasonalAPIView(APIView):
-    def get(self, request):
-        serializer = SeasonalSerializer(data=request.query_params)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+# class SeasonalAPIView(APIView):
+#     def get(self, request):
+#         serializer = SeasonalSerializer(data=request.query_params)
+#         serializer.is_valid(raise_exception=True)
+#         data = serializer.validated_data
 
-        # sensor_ids = Sensor.objects.filter(
-        #     station__station_id=data['station_id'] if data['station_id'] else Station.objects.values('station_id')
-        # ).values_list('sensor_id', flat=True)
+#         # sensor_ids = Sensor.objects.filter(
+#         #     station__station_id=data['station_id'] if data['station_id'] else Station.objects.values('station_id')
+#         # ).values_list('sensor_id', flat=True)
 
-        if data['station_id']:
-            sensor_ids = Sensor.objects.filter(
-                station__station_id=data['station_id']
-            ).values_list('sensor_id', flat=True)
-        else:
-            sensor_ids = Sensor.objects.filter(
-                station__station_id__in=Station.objects.values_list('station_id', flat=True)
-            ).values_list('sensor_id', flat=True)
+#         if data['station_id']:
+#             sensor_ids = Sensor.objects.filter(
+#                 station__station_id=data['station_id']
+#             ).values_list('sensor_id', flat=True)
+#         else:
+#             sensor_ids = Sensor.objects.filter(
+#                 station__station_id__in=Station.objects.values_list('station_id', flat=True)
+#             ).values_list('sensor_id', flat=True)
 
-        if not sensor_ids:
-            return Response({"error": "No sensors found"}, status=status.HTTP_400_BAD_REQUEST)
+#         if not sensor_ids:
+#             return Response({"error": "No sensors found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            qs = Reading.objects.seasonal_aggregates(
-                sensor_ids=sensor_ids,
-                param_code=data['parameter'],
-                cycle=data['cycle'],
-                year_start=data['year_start'],
-                year_end=data['year_end']
-            )
+#         try:
+#             qs = Reading.objects.seasonal_aggregates(
+#                 sensor_ids=sensor_ids,
+#                 param_code=data['parameter'],
+#                 cycle=data['cycle'],
+#                 year_start=data['year_start'],
+#                 year_end=data['year_end']
+#             )
 
-            result = [{'date': item['cycle_label'], 'value': item['value']} for item in qs]
+#             result = [{'date': item['cycle_label'], 'value': item['value']} for item in qs]
 
-            if data['show_trend'] or data['show_anomalies']:
-                df = pd.DataFrame(result)
-                df['value'] = df['value'].fillna(df['value'].mean())
+#             if data['show_trend'] or data['show_anomalies']:
+#                 df = pd.DataFrame(result)
+#                 df['value'] = df['value'].fillna(df['value'].mean())
                 
-                if data['show_trend']:
-                    df['trend'] = df['value'].rolling(window=3, center=True).mean()
-                    df['trend'] = df['trend'].where(df['trend'].notna(), None)
+#                 if data['show_trend']:
+#                     df['trend'] = df['value'].rolling(window=3, center=True).mean()
+#                     df['trend'] = df['trend'].where(df['trend'].notna(), None)
 
-                if data['show_anomalies']:
-                    mean = df['value'].mean()
-                    std = df['value'].std()
-                    df['anomaly'] = df['value'].apply(lambda x: abs(x - mean) > 1.5 * std)
+#                 if data['show_anomalies']:
+#                     mean = df['value'].mean()
+#                     std = df['value'].std()
+#                     df['anomaly'] = df['value'].apply(lambda x: abs(x - mean) > 1.5 * std)
             
-                # лол
-                df = df.apply(lambda x: x.replace([np.nan, np.inf, -np.inf], None))
-                result = df.to_dict('records')
+#                 # лол
+#                 df = df.apply(lambda x: x.replace([np.nan, np.inf, -np.inf], None))
+#                 result = df.to_dict('records')
 
-            response_serializer = SeasonalResponseSerializer(result, many=True)
-            return Response(response_serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#             response_serializer = SeasonalResponseSerializer(result, many=True)
+#             return Response(response_serializer.data, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class IndexesAPIView(APIView):
     def get(self, request):
@@ -407,6 +407,58 @@ class CartogramAPIView(APIView):
             )
             
             response_serializer = CartogramResponseSerializer(result, many=True)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class SeasonalAPIView(APIView):
+    def get(self, request):
+        serializer = SeasonalSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        if data['station_id']:
+            sensor_ids = Sensor.objects.filter(
+                station__station_id=data['station_id']
+            ).values_list('sensor_id', flat=True)
+        else:
+            sensor_ids = Sensor.objects.filter(
+                station__station_id__in=Station.objects.values_list('station_id', flat=True)
+            ).values_list('sensor_id', flat=True)
+
+        if not sensor_ids:
+            return Response({"error": "No sensors found"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            qs = Reading.objects.seasonal_aggregates(
+                sensor_ids=sensor_ids,
+                param_code=data['parameter'],
+                cycle=data['cycle'],
+                year_start=data['year_start'],
+                year_end=data['year_end'],
+                target_month=data.get('target_month'),
+                target_day=data.get('target_day')
+            )
+
+            result = [{'date': item['cycle_label'], 'value': item['value']} for item in qs]
+
+            if data['show_trend'] or data['show_anomalies']:
+                df = pd.DataFrame(result)
+                df['value'] = df['value'].fillna(df['value'].mean())
+                
+                if data['show_trend']:
+                    df['trend'] = df['value'].rolling(window=3, center=True).mean()
+                    df['trend'] = df['trend'].where(df['trend'].notna(), None)
+
+                if data['show_anomalies']:
+                    mean = df['value'].mean()
+                    std = df['value'].std()
+                    df['anomaly'] = df['value'].apply(lambda x: abs(x - mean) > 1.5 * std)
+            
+                df = df.apply(lambda x: x.replace([np.nan, np.inf, -np.inf], None))
+                result = df.to_dict('records')
+
+            response_serializer = SeasonalResponseSerializer(result, many=True)
             return Response(response_serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -54,21 +54,21 @@ class TimeSeriesResponseSerializer(serializers.Serializer):
     residual = serializers.FloatField(required=False)
     normal_value = serializers.FloatField(required=False)
 
-class SeasonalSerializer(serializers.Serializer):
-    station_id = serializers.IntegerField(required=False, allow_null=True)
-    parameter = serializers.ChoiceField(choices=['TEMP', 'HUM', 'PRECIP', 'WS'])
-    cycle = serializers.ChoiceField(choices=['daily', 'monthly', 'yearly'])
-    year_start = serializers.IntegerField(min_value=1995)
-    year_end = serializers.IntegerField(min_value=1995)
-    show_trend = serializers.BooleanField(default=False)
-    show_anomalies = serializers.BooleanField(default=False)
+# class SeasonalSerializer(serializers.Serializer):
+#     station_id = serializers.IntegerField(required=False, allow_null=True)
+#     parameter = serializers.ChoiceField(choices=['TEMP', 'HUM', 'PRECIP', 'WS'])
+#     cycle = serializers.ChoiceField(choices=['daily', 'monthly', 'yearly'])
+#     year_start = serializers.IntegerField(min_value=1995)
+#     year_end = serializers.IntegerField(min_value=1995)
+#     show_trend = serializers.BooleanField(default=False)
+#     show_anomalies = serializers.BooleanField(default=False)
 
-    def validate(self, data):
-        if data['year_start'] > data['year_end']:
-            raise serializers.ValidationError("year_start must be less than or equal to year_end")
-        if data['station_id'] and not Station.objects.filter(station_id=data['station_id']).exists():
-            raise serializers.ValidationError(f"Station with station_id {data['station_id']} does not exist")
-        return data
+#     def validate(self, data):
+#         if data['year_start'] > data['year_end']:
+#             raise serializers.ValidationError("year_start must be less than or equal to year_end")
+#         if data['station_id'] and not Station.objects.filter(station_id=data['station_id']).exists():
+#             raise serializers.ValidationError(f"Station with station_id {data['station_id']} does not exist")
+#         return data
 
 class SeasonalResponseSerializer(serializers.Serializer):
     date = serializers.CharField()
@@ -137,3 +137,25 @@ class CartogramSerializer(serializers.Serializer):
 class CartogramResponseSerializer(serializers.Serializer):
     station = serializers.IntegerField()
     value = serializers.FloatField(allow_null=True)
+
+class SeasonalSerializer(serializers.Serializer):
+    station_id = serializers.IntegerField(required=False, allow_null=True)
+    parameter = serializers.ChoiceField(choices=['TEMP', 'HUM', 'PRECIP', 'WS'])
+    cycle = serializers.ChoiceField(choices=['daily', 'monthly'])
+    year_start = serializers.IntegerField(min_value=1995)
+    year_end = serializers.IntegerField(min_value=1995)
+    target_month = serializers.IntegerField(min_value=1, max_value=12, required=False)
+    target_day = serializers.IntegerField(min_value=1, max_value=31, required=False)
+    show_trend = serializers.BooleanField(default=False)
+    show_anomalies = serializers.BooleanField(default=False)
+
+    def validate(self, data):
+        if data['year_start'] > data['year_end']:
+            raise serializers.ValidationError("year_start must be less than or equal to year_end")
+        if data['station_id'] and not Station.objects.filter(station_id=data['station_id']).exists():
+            raise serializers.ValidationError(f"Station with station_id {data['station_id']} does not exist")
+        if data['cycle'] == 'daily' and (not data.get('target_month') or not data.get('target_day')):
+            raise serializers.ValidationError("target_month and target_day are required for daily cycle")
+        if data['cycle'] == 'monthly' and not data.get('target_month'):
+            raise serializers.ValidationError("target_month is required for monthly cycle")
+        return data

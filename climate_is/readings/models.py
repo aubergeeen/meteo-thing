@@ -62,66 +62,66 @@ class ReadingQuerySet(models.QuerySet):
             .order_by('period')
         )
     
-    def seasonal_aggregates(self, sensor_ids, param_code, cycle, year_start, year_end):
-        if cycle not in ['daily', 'monthly', 'yearly']:
-            raise ValueError(f"Unsupported cycle: {cycle}")
+    # def seasonal_aggregates(self, sensor_ids, param_code, cycle, year_start, year_end):
+    #     if cycle not in ['daily', 'monthly', 'yearly']:
+    #         raise ValueError(f"Unsupported cycle: {cycle}")
 
-        annotations = {}
-        group_fields = []
-        cycle_label = None
+    #     annotations = {}
+    #     group_fields = []
+    #     cycle_label = None
 
-        if cycle == 'daily':
-            annotations['month'] = ExtractMonth('timestamp')
-            annotations['day'] = ExtractDay('timestamp')
-            group_fields = ['month', 'day']
-            cycle_label = Concat(
-                #LPad(ExtractMonth('timestamp'), 2, Value('0')),
-                ExtractMonth('timestamp'),
-                Value('-'),
-                #LPad(ExtractDay('timestamp'), 2, Value('0')),
-                ExtractDay('timestamp'),
-                output_field=CharField()
-            )
-        elif cycle == 'monthly':
-            annotations['month'] = ExtractMonth('timestamp')
-            group_fields = ['month']
-            # тупо лол 
-            cycle_label = Case(
-                When(month=1, then=Value('Январь')),
-                When(month=2, then=Value('Февраль')),
-                When(month=3, then=Value('Март')),
-                When(month=4, then=Value('Апрель')),
-                When(month=5, then=Value('Май')),
-                When(month=6, then=Value('Июнь')),
-                When(month=7, then=Value('Июль')),
-                When(month=8, then=Value('Август')),
-                When(month=9, then=Value('Сентябрь')),
-                When(month=10, then=Value('Октябрь')),
-                When(month=11, then=Value('Ноябрь')),
-                When(month=12, then=Value('Декабрь')),
-                output_field=CharField()
-            )
-        else:  # yearly
-            annotations['year'] = ExtractYear('timestamp')
-            group_fields = ['year']
-            cycle_label = Concat(
-                ExtractYear('timestamp'),
-                output_field=CharField()
-            )
+    #     if cycle == 'daily':
+    #         annotations['month'] = ExtractMonth('timestamp')
+    #         annotations['day'] = ExtractDay('timestamp')
+    #         group_fields = ['month', 'day']
+    #         cycle_label = Concat(
+    #             #LPad(ExtractMonth('timestamp'), 2, Value('0')),
+    #             ExtractMonth('timestamp'),
+    #             Value('-'),
+    #             #LPad(ExtractDay('timestamp'), 2, Value('0')),
+    #             ExtractDay('timestamp'),
+    #             output_field=CharField()
+    #         )
+    #     elif cycle == 'monthly':
+    #         annotations['month'] = ExtractMonth('timestamp')
+    #         group_fields = ['month']
+    #         # тупо лол 
+    #         cycle_label = Case(
+    #             When(month=1, then=Value('Январь')),
+    #             When(month=2, then=Value('Февраль')),
+    #             When(month=3, then=Value('Март')),
+    #             When(month=4, then=Value('Апрель')),
+    #             When(month=5, then=Value('Май')),
+    #             When(month=6, then=Value('Июнь')),
+    #             When(month=7, then=Value('Июль')),
+    #             When(month=8, then=Value('Август')),
+    #             When(month=9, then=Value('Сентябрь')),
+    #             When(month=10, then=Value('Октябрь')),
+    #             When(month=11, then=Value('Ноябрь')),
+    #             When(month=12, then=Value('Декабрь')),
+    #             output_field=CharField()
+    #         )
+    #     else:  # yearly
+    #         annotations['year'] = ExtractYear('timestamp')
+    #         group_fields = ['year']
+    #         cycle_label = Concat(
+    #             ExtractYear('timestamp'),
+    #             output_field=CharField()
+    #         )
 
-        return (
-            self.filter(
-                sensor__sensor_id__in=sensor_ids,
-                sensor__sensor_model__param_type__code=param_code,
-                timestamp__year__gte=year_start,
-                timestamp__year__lte=year_end
-            )
-            .annotate(**annotations)
-            .annotate(cycle_label=cycle_label)
-            .values('cycle_label', *group_fields)
-            .annotate(value=Avg('value'))
-            .order_by(*group_fields)
-        )
+    #     return (
+    #         self.filter(
+    #             sensor__sensor_id__in=sensor_ids,
+    #             sensor__sensor_model__param_type__code=param_code,
+    #             timestamp__year__gte=year_start,
+    #             timestamp__year__lte=year_end
+    #         )
+    #         .annotate(**annotations)
+    #         .annotate(cycle_label=cycle_label)
+    #         .values('cycle_label', *group_fields)
+    #         .annotate(value=Avg('value'))
+    #         .order_by(*group_fields)
+    #     )
     
     def climate_normals(self, sensor_ids, param_code, period='monthly', baseline_start=2005, baseline_end=2025):
         if period.lower() not in ['monthly', 'daily']:
@@ -593,6 +593,66 @@ class ReadingQuerySet(models.QuerySet):
             result.append(formatted_item)
 
         return result
+    
+    def seasonal_aggregates(self, sensor_ids, param_code, cycle, year_start, year_end, target_month=None, target_day=None):
+        if cycle not in ['daily', 'monthly', 'yearly']:
+            raise ValueError(f"Unsupported cycle: {cycle}")
+
+        annotations = {}
+        group_fields = []
+        cycle_label = None
+
+        # Всегда добавляем год для группировки по годам
+        annotations['year'] = ExtractYear('timestamp')
+        group_fields = ['year']
+
+        if cycle == 'daily':
+            if not target_month or not target_day:
+                raise ValueError("target_month and target_day are required for daily cycle")
+            annotations['month'] = ExtractMonth('timestamp')
+            annotations['day'] = ExtractDay('timestamp')
+            group_fields.extend(['month', 'day'])
+            cycle_label = Concat(
+                ExtractYear('timestamp'),
+                Value('-'),
+                ExtractMonth('timestamp'),
+                Value('-'),
+                ExtractDay('timestamp'),
+                output_field=CharField()
+            )
+
+        elif cycle == 'monthly':
+            if not target_month:
+                raise ValueError("target_month is required for monthly cycle")
+            annotations['month'] = ExtractMonth('timestamp')
+            group_fields.append('month')
+            cycle_label = Concat(
+                ExtractYear('timestamp'),
+                Value('-'),
+                ExtractMonth('timestamp'),
+                output_field=CharField()
+            )
+
+        # Фильтрация по target_month и target_day, если указаны
+        filters = {
+            'sensor__sensor_id__in': sensor_ids,
+            'sensor__sensor_model__param_type__code': param_code,
+            'timestamp__year__gte': year_start,
+            'timestamp__year__lte': year_end
+        }
+        if target_month:
+            filters['timestamp__month'] = target_month
+        if target_day:
+            filters['timestamp__day'] = target_day
+
+        return (
+            self.filter(**filters)
+            .annotate(**annotations)
+            .annotate(cycle_label=cycle_label)
+            .values('cycle_label', *group_fields)
+            .annotate(value=Avg('value'))
+            .order_by('year')
+        )
 
 class ReadingManager(models.Manager):
     def get_queryset(self):
@@ -630,6 +690,7 @@ class ReadingManager(models.Manager):
     
     def cartogram_aggregates(self, *args, **kwargs):
         return self.get_queryset().cartogram_aggregates(*args, **kwargs)
+    
     
 class Reading(models.Model):
     objects = ReadingManager()

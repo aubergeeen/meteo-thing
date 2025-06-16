@@ -84,8 +84,23 @@
                         <select id="cycle-select-seasonal" name="cycle" class="form-select">
                             <option value="daily">Дневной</option>
                             <option value="monthly">Месячный</option>
-                            <option value="yearly">Годовой</option>
                         </select>
+                        <select id="month-select-seasonal" name="target_month" class="form-select">
+                            <option value="">Выберите месяц</option>
+                            <option value="1">Январь</option>
+                            <option value="2">Февраль</option>
+                            <option value="3">Март</option>
+                            <option value="4">Апрель</option>
+                            <option value="5">Май</option>
+                            <option value="6">Июнь</option>
+                            <option value="7">Июль</option>
+                            <option value="8">Август</option>
+                            <option value="9">Сентябрь</option>
+                            <option value="10">Октябрь</option>
+                            <option value="11">Ноябрь</option>
+                            <option value="12">Декабрь</option>
+                        </select>
+                        <input type="number" id="day-select-seasonal" name="target_day" class="form-select" style="display: none;" min="1" max="31" placeholder="День (1-31)" required>
                         <select id="year-start-seasonal" name="year_start" class="form-select">
                             {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
